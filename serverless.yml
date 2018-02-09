@@ -1,0 +1,39 @@
+service: pynesl
+
+frameworkVersion: ">=1.2.0 <2.0.0"
+
+provider:
+  name: aws
+  runtime: python2.7
+  usagePlan:
+    quota:
+      limit: 10000
+      period: DAY
+    throttle:
+      burstLimit: 20
+      rateLimit: 5
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - lambda:InvokeFunction
+      Resource: "*"
+package:
+  include:
+    handler.py
+    package.json
+    lib/**
+    bin/**
+
+functions:
+  neslapi:
+    handler: handler.neslapi
+    memorySize: 128
+    timeout: 10
+    events:
+      - http:
+          path: nesl
+          method: post
+  nesl:
+    handler: handler.nesl
+    memorySize: 256
+    timeout: 5
