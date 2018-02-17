@@ -58,7 +58,7 @@ def nesl(event, context):
     os.environ["LD_LIBRARY_PATH"] = './lib'
 
     # Call the NESL interpreter, feed input from <prog>, decode output
-    p = subprocess.Popen("nesl/neslserver", stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.STDOUT)
+    p = subprocess.Popen("bin/neslserver", stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.STDOUT)
     res = p.communicate(input=prog.encode('latin-1'))[0].decode()
     logger.info('Interpreter output: \n' + res)
 
