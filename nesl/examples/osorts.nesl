@@ -1,0 +1,19 @@
+function countbuckets(v, b, i) =
+if i == #v then b
+else
+  let k = v[i]
+      b[k] = 1 + b[k]
+  in countbuckets(v, b, i + 1)
+
+function finallocation(p, v, b, i) =
+if i == #v then p
+else
+  let k = v[i]
+      p[i] = b[k]
+      b[k] = 1 + b[k]
+  in finallocation(p, v, b, i + 1)
+
+for i = 0 to #v
+  k = v[i]
+  b[k] = b[k] + 1
+return b

@@ -1,0 +1,61 @@
+%
+This example finds the convex hull in 2 dimensions for a set of points.
+The algorithm is described in the NESL language definition.
+This file also includes a function, hull_demo(n), that picks approximately
+n random points in a circle, plots the points, finds the hull, and plots
+the hull.
+%
+
+function cross_product(o,line) =
+let (xo,yo) = o; 
+    ((x1,y1),(x2,y2)) = line;
+in (x1-xo)*(y2-yo) - (y1-yo)*(x2-xo) $
+
+function hsplit(points,p1,p2) =
+let cross = {cross_product(p,(p1,p2)): p in points};
+    packed = {p in points; c in cross | plusp(c)};
+in if (#packed == 0) then [(packed,p1,p2)]
+   else
+     let pm = points[max_index(cross)];
+     in [(packed,p1,pm),(packed,pm,p2)] $
+
+function hsplit_loop(data,win,box) =
+let type,button_name,pt,x,ch = w_get_input(win);
+in
+    if eql(button_name,"quit") or (eql(type,"key") and (ch==`q)) then 0
+    else if not(eql(type,"button")) then
+	hsplit_loop(data,win,box)
+    else
+	let 
+	    new_data = flatten({hsplit(d): d in data});
+	    x = w_draw_segments({(p1,p2):(p,p1,p2) in new_data},2,w_red,box)
+	in hsplit_loop(new_data,win,box) $
+
+function convex_hull(points,win,box) =
+let x = {x : (x,y) in points};
+    minx = points[min_index(x)];
+    maxx = points[max_index(x)];
+in hsplit_loop([(points,minx,maxx),(points,maxx,minx)],win,box) $
+
+function random_points(n) =
+let m = round(float(n)*4.0/pi);
+    points = {rand(i) - 1.0, rand(i) - 1.0: i in dist(2.0,m)};
+in {x,y in points | x^2 + y^2 < 1.0}  $
+
+function hull_init_plot(points) =
+let 
+    bbox =(-1.0,-1.0),(2.0,2.0);
+    display =get_environment_variable("DISPLAY");
+    win = w_make_window(((100,0),(750,650)),"Quickhull",w_pink,display);
+    win,box = w_add_box(((125,25),(600,600)),bbox,"mesh",w_black,win);
+    win = w_add_button(((15,75),(95,35)),"step",w_blue,win);
+    win = w_add_button(((15,125),(95,35)),"quit",w_blue,win);
+    foo = w_draw_segments({p,p: p in points},2,w_white,box);
+in win,box $
+
+function hull_demo(n) =
+let points = random_points(n);
+    ignore = if (#points < 2) then error("Not enough points.") else f;
+    win,box = hull_init_plot(points);
+    hull =   convex_hull(points,win,box);
+in w_kill_window(win) $

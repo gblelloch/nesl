@@ -1,0 +1,98 @@
+function cross_product(o,line) =
+let (xo,yo) = o; 
+    ((x1,y1),(x2,y2)) = line;
+in (x1-xo)*(y2-yo) - (y1-yo)*(x2-xo) $
+
+function max_x(pt0,pt1) = 
+if first(pt0) < first(pt1) then pt0,pt1 else pt1,pt0 $
+
+function slope((x0,y0),(x1,y1)) = (y1-y0)/(x1-x0) $
+
+function pick_pairs(pts) =
+let
+    n2 = #pts/2;
+    remain = drop(pts,2*n2);
+    pairs = {max_x(p0,p1) : p0 in pts->[0:n2*2:2]; p1 in pts->[1:n2*2:2]};
+in remain,pairs $
+
+function slow_bridge(pts,x) =
+let
+    ptl = {(xp,yp) in pts | xp <= x};
+    ptr = {(xp,yp) in pts | xp > x};
+    pairs = flatten({{(pl,pr): pl in ptl}: pr in ptr});
+    ys = {y1 + (y2-y1)*(x-x1)/(x2-x1) : (x1,y1),(x2,y2) in pairs};
+in pairs[max_index(ys)] $
+
+
+function bridge(pts,x) =
+if #pts == 2 then (pts[0],pts[1])
+else if #pts == 3 then slow_bridge(pts,x)
+else let
+    remain,pairs = pick_pairs(pts);
+    pivot_line = pairs[rand(#pairs)];
+    pivot_slope = slope(pivot_line);
+    i_max = max_index({cross_product(pt,pivot_line) : pt in pts});
+    pair_index = mod(i_max/2,#pairs);
+    (x0,y0),(x1,y1) = pairs[pair_index];
+    (xm,ym) = pts[i_max];
+in
+    if slope((x0,y0),(x1,y1)) == pivot_slope and i_max/2 /= #pairs
+       and x0 <= x and x1 >= x
+    then ((x0,y0),(x1,y1))
+    else 
+	let
+    	    pts = if xm < x 
+	          then flatten({if slope(p0,p1) >= pivot_slope 
+	                        then [p1] else [p0,p1]
+				: (p0,p1) in pairs})
+                  else flatten({if slope(p0,p1) <= pivot_slope 
+                                then [p0] else [p0,p1]
+				:  (p0,p1) in pairs})
+	in bridge(pts++remain,x) $
+
+function hull(points,p1,p2) =
+if eql(p1,p2) then [p1]
+else let 
+    mx = median({x : (x,y) in points});
+    (pl,pr) = bridge(points,mx);
+    left = {(x,y) in points | x <= first(pl)};
+    right = {(x,y) in points | x >= first(pr)};
+in flatten({hull(data): data in [(left,p1,pl),(right,pr,p2)]}) $
+
+function upper_hull(points) =
+let x = {x : (x,y) in points};
+    minx = points[min_index(x)];
+    maxx = points[max_index(x)];
+in hull(points,minx,maxx) $
+
+********************
+
+function supporting_points(pivot_line,pts) =
+let
+    distances = {cross_product(pt,pivot_line) : pt in pts};
+    max_distance = max_val(distances);
+    points = {pts; d in distances | d == max_distance};
+    x = {x : (x,y) in points};
+in points[min_index(x)],points[max_index(x)] $
+
+function slope((x0,y0),(x1,y1)) = (y1-y0)/(x1-x0) $
+
+function bridge(S,a) =
+let remain,pairs = pick_pairs(S)
+in if #S == 2 then pairs[0]
+   else let
+       pivot_line = pairs[rand(#pairs)];
+       p_k,p_m = supporting_points(pivot_line,S);
+   in
+       if first(p_k)<=a and first(p_m)>a then p_k,p_m
+       else 
+	   let
+	       K = slope(pivot_line);
+	       S_n = if first(p_k) <= a 
+	             then flatten({if slope(p_i,p_j) >= K
+	                           then [p_j] else [p_i,p_j]
+				   : (p_i,p_j) in pairs})
+                     else flatten({if slope(p_i,p_j) <= K
+                                   then [p_i] else [p_i,p_j]
+				   :  (p_i,p_j) in pairs})
+	in bridge(S_n++remain,a) $

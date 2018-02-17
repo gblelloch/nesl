@@ -1,0 +1,5 @@
+#!/bin/csh -f
+
+set lispfiles = (defop.lisp doc.lisp free.lisp funspec.lisp lisp-dependent.lisp nesl-read.lisp output.lisp packages.lisp parse.lisp pprint.lisp ptrans.lisp read-eval-print.lisp run-vcode.lisp strip-recs.lisp tokens.lisp trace.lisp trans.lisp type.lisp type-check.lisp vcode-lisp.lisp)
+
+etags $lispfiles

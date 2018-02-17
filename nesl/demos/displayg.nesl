@@ -1,0 +1,113 @@
+% 200usecs/float elt
+ 3usec/int elt
+%
+
+function get_from_edges(edges,v) =
+  {(e1,e2) : e1 in v->{e1: (e1,e2) in edges} ; 
+             e2 in v->{e2: (e1,e2) in edges} } $
+
+function transfloat(val,digits) =
+if val==0.0 then [0,0]
+else let
+    e = floor(log(abs(val),10.0))-digits-1;
+    m = round(val/expt(10.,float(e)))
+in [m,e] $
+
+function transfloatfile(filename,digits) =
+let ivals = flatten({transfloat(v,digits)
+		     : v in read_float_seq_from_file(filename)})
+in write_object_to_file(ivals,filename++".fl") $
+
+function read_ifloat_seq_from_file(filename) =
+let vals = read_object_from_file([]int,filename++".fl");
+in {float(m)*expt(10.,float(e)): m in even_elts(vals); e in odd_elts(vals)} $
+
+function partition_by_n(a,n) = partition(a,dist(n, #a/n)) $
+
+function read_graph(graph,dimensions) =
+let flat_points = read_ifloat_seq_from_file(graph ++ ".nodes");
+    flat_edges  = read_int_seq_from_file(graph ++ ".edges");
+    points      = partition_by_n(flat_points,dimensions);
+    edges       = {a[0],a[1] : a in partition_by_n(flat_edges,2)}
+in (points,edges) $
+
+function read_cells(name,dimensions) =
+let flat_points = read_float_seq_from_file(name ++ ".points");
+    flat_edges  = read_int_seq_from_file(name ++ ".cells");
+    points      = partition_by_n(flat_points,dimensions);
+    edges       = flatten({[(a[0],a[1]),(a[1],a[2]),(a[0],a[2])] 
+			   : a in partition_by_n(flat_edges,3)});
+    edges       = remove_duplicates({min(a,b),max(a,b): a,b in edges});
+in (points,edges) $
+
+function init_plot(points,edges) =
+let 
+    % Create the window %
+    display = get_environment_variable("DISPLAY");
+    win = w_make_window(((100,0),(850,675)),"Mesh Display",w_pink,display);
+
+    % Add the main box and draw the original edges %
+    pts = {p[0],p[1]: p in points};
+    bbox = w_bounding_box(pts);  
+    win,box1 = w_add_box(((175,50),(650,600)),bbox,"mesh",w_black,win);
+    foo = w_draw_points(pts,w_blue,box1);
+
+    % Add the little zoom box and fill it with the points %
+    win,box2 = w_add_box(((15,50),(145,130)),bbox,"mesh2",w_black,win);
+    foo = w_draw_points({p[0],p[1]: p in points},w_red,box2);
+
+    pts = {p[0],(p[1]+p[2])/sqrt(2.0): p in points};
+    win,box3 = w_add_box(((15,200),(145,130)),bbox,"mesh2",w_black,win);
+    foo = w_draw_points(pts,w_red,box3);
+
+    pts = {p[0],p[2]: p in points};
+    win,box4 = w_add_box(((15,350),(145,130)),bbox,"mesh2",w_black,win);
+    foo = w_draw_points(pts,w_red,box4);
+
+    % Add the buttons (offset,size,stride) %
+    buttons = ["quit","zoom up"];
+    win = w_add_button_stack(((35,550),(95,35),(0,50)),buttons,w_blue,win);
+
+    win = w_add_text((250,20),"To zoom press the middle button on one corner and release on the other",w_black,win);
+in win,box1,box2 $
+
+function reset_zoom(points,edges,zbox,win,box1,box2) =
+let
+    win,box = w_reset_box_size("mesh",zbox,win);
+    foo = w_draw_rectangle(w_bounds_from_box(box1),1,w_xor,box2);
+    foo = w_draw_rectangle(w_bounds_from_box(box),1,w_xor,box2);
+    foo = w_clear_box(box);
+    points = {p[0],p[1]: p in points};
+    foo = w_draw_points(points,w_blue,box);
+in win,box $
+
+function zoom_loop(points,edges,win,box1,box2) =
+let type,name,pt,(state,button),ch = w_get_input(win);
+in
+    % QUIT %
+    if (eql(type,"button") and eql(name,"quit")) or (ch==`q) then 
+      w_kill_window(win)
+
+    % ZOOM IN ON MIDDLE BUTTON CLICK %
+    else if eql(type,"click") and (button == 2) then
+	let 
+	    zbox = if eql(name,"mesh") then w_get_zoom_box(pt,2,box1)
+                   else w_get_zoom_box(pt,1,box2);
+	    win,box1 = reset_zoom(points,edges,zbox,win,box1,box2);
+	in zoom_loop(points,edges,win,box1,box2)
+
+    % ZOOM OUT %
+    else if (eql(type,"button") and eql(name,"zoom up")) then
+        let 
+	    zbox = w_bounding_box({p[0],p[1]: p in points});
+	    win,box1 = reset_zoom(points,edges,zbox,win,box1,box2);
+	in zoom_loop(points,edges,win,box1,box2)
+
+    % ELSE JUST LOOP %
+    else zoom_loop(points,edges,win,box1,box2) $
+
+function zoom_display(points,edges) =
+let
+    win,box1,box2 = init_plot(points,edges);
+in zoom_loop(points,edges,win,box1,box2) $
+

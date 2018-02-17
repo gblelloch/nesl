@@ -1,0 +1,744 @@
+% This file has four parts
+  (1) The low level xps routines for interacting with xneslplot
+  (2) A set of "box" routines for dealing with scaling
+  (3) The old window interface built on 1 and 2
+  (4) The new window interface built on 1 and 2
+%
+
+% 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; PART 1: THE LOWEST LEVEL ROUTINES (XPS)
+;;;  These interact directly with the C plotting process (xneslplot)
+;;;  All user routines have xps_ as their prefix.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+%
+
+% DATATYPES %
+
+datatype xps_window (stream,stream),(int,int);
+datatype xps_gc int;
+
+% This is the filename of the executable plotting code.  It is set when the 
+  user does a "set config xxx" to the file specified by the configuration. %
+xps_plot_file = "";
+
+gif_plot_file = "/afs/cs/project/scandal/nesl/3.1/utils/gneslplot";
+
+% SOME UTILITIES %
+
+function prim_read_int(str) = first(read_object(0,str)) $
+
+function prim_plot_command(num, data, windowstr) =
+let 
+    j = write_first_int(num, windowstr); 
+    k = prim_write_object(data, windowstr)
+in t;
+
+function prim_serial_plot_command(num, data, windowstr) =
+  first(write_object((num,data),windowstr)) $
+
+function prim_serial_plot_com(num, windowstr) =
+  first(write_object(num,windowstr)) $
+
+function flip_point((x,y),h) = x,h-y $
+function flip_points(points,h) = {x,h-y:(x,y) in points} $
+
+function prim_make_window(offset,size,mode,title,display,error_stream) 
+: ((int, int), (int, int), int, [char], [char],stream) -> 
+  ((stream, stream), (bool, [char])) =
+let
+    (sin,sout,serr),(flag,str) = spawn(xps_plot_file,nullstr,nullstr,
+				       error_stream);
+in
+    if flag then
+	let f0 = write_object((display,title,mode,offset,size),sin)
+	in (sin,sout),(flag,str)
+    else (stream(-1),stream(-1)),(flag,str) $
+
+% 
+;;; CREATING, REMOVING AND RESIZING WINDOWS
+%
+
+function xps_make_gif_window(size,filename) 
+   : ((int, int), [char]) -> (xps_window, (bool, [char])) =
+let
+    (sin,sout,serr),(flag,str) = spawn(gif_plot_file,nullstr,nullstr,stderr);
+    foo = if flag then write_object((filename,size),sin) else f,"";
+in xps_window((sin,sout),size),(flag,str) $
+
+function xps_make_window(((x0,y0),(width,height)),title,display) =
+let 
+    (sin,sout),errinfo = prim_make_window((x0,y0),(width,height),0,
+					  title,display,stderr);
+    stype = prim_read_int(sout)
+in xps_window((sin,sout),(width,height)),errinfo $
+
+function xps_nmake_window(((x0,y0),(width,height)),title,display,
+			  error_stream) =
+let 
+    (sin,sout),errinfo = prim_make_window((x0,y0),(width,height),0,
+					  title,display,error_stream);
+    stype = prim_read_int(sout)
+in xps_window((sin,sout),(width,height)),stype,errinfo $
+
+function xps_make_ps_window(((x0,y0),(width,height)),filename) =
+let strs,errinfo = prim_make_window((x0,y0),(width,height),1,"",filename,
+				    stderr)
+in xps_window(strs,(width,height)),errinfo $
+
+function xps_close_window(win) =
+let 
+    xps_window((strout,strin),(width,height)) = win;
+    flag = prim_serial_plot_com(-1,strout);
+    foo = close_file(strout),close_file(strin)
+in flag $
+
+function xps_kill_window(win) =
+let 
+    xps_window((strout,strin),(width,height)) = win;
+    flag = prim_serial_plot_com(4,strout);
+    foo = close_file(strout),close_file(strin)
+in flag $
+
+function xps_clear_window(win) =
+let xps_window((strout,strin),(width,height)) = win;
+in prim_serial_plot_com(6,strout) $
+
+function xps_resize_window((pos,size),win) =
+let
+   xps_window((strout,strin),(width,height)) = win;
+   foo = prim_serial_plot_command(23,(pos,size),strout);
+in
+  xps_window((strout,strin),size) $
+
+
+% 
+;;; GRAPHIC CONTEXTS
+%
+
+xps_func_clear =	0;	% 0 %
+xps_func_and =		1;	% src AND dst %
+xps_func_and_reverse =	2;	% src AND NOT dst %
+xps_func_copy =	        3;	% src %
+xps_func_and_inverted =	4;	% NOT src AND dst %
+xps_func_noop =	        5;	% dst %
+xps_func_xor =		6;	% src XOR dst %
+xps_func_or =		7;	% src OR dst %
+xps_func_set =		15;	% 1 %
+
+xps_pixmap_solid_white  = !#v(255 255 255 255 255 255 255 255);
+xps_pixmap_dense_white  = !#v(85 170 85 170 85 170 85 170);
+xps_pixmap_doted        = !#v(0 187 0 187 0 187 0 187);
+xps_pixmap_grid         = !#v(0 204 0 204 0 204 0 204);
+xps_pixmap_duck_foot    = !#v(34 17 68 136 34 17 68 136);
+xps_pixmap_ball_field   = !#v(136 118 112 112 136 103 7 7);
+xps_pixmap_waffle       = !#v(64 255 64 64 79 79 79 79);
+xps_pixmap_bricks       = !#v(255 128 128 128 255 128 128 128);
+xps_pixmap_wattle_fence = !#v(7 139 221 184 112 232 221 142);
+xps_pixmap_lace         = !#v(187 68 130 130 130 68 187 131);
+xps_pixmap_square_cross = !#v(16 124 68 199 68 124 16 16);
+xps_pixmap_grater       = !#v(30 22 42 84 170 219 155 20);
+xps_pixmap_chain_mail   = !#v(128 128 65 62 8 8 20 227);
+xps_pixmap_black        = !#v(0 0 0 0 0 0 0 0);
+
+function xps_white_pixel(win) =
+let 
+    xps_window((strout,strin),(width,height)) = win;
+    foo = prim_serial_plot_com(25,strout)
+in prim_read_int(strin);
+
+function xps_black_pixel(win) =
+let 
+    xps_window((strout,strin),(width,height)) = win;
+    foo = prim_serial_plot_com(26,strout)
+in prim_read_int(strin);
+
+    
+function get_screen_size(win) =
+let 
+    xps_window((strout,strin),(width,height)) = win;
+    foo = prim_serial_plot_com(22,strout);
+    w = prim_read_int(strin);
+    h = prim_read_int(strin);
+in (w,h) $
+
+function xps_line_gc(func,foreground,background,wind) 
+: (int,int,int,xps_window) -> xps_gc =
+let 
+    xps_window((strout,strin),(width,height)) = wind;
+    foo = prim_serial_plot_command(9,(func,foreground,background),strout)
+in xps_gc(prim_read_int(strin)) $
+
+function xps_stipple_gc(func,foreground,background,wind) 
+: (int,int,int,xps_window) -> xps_gc =
+let 
+    xps_window((strout,strin),(width,height)) = wind;
+    foo = prim_serial_plot_command(14,(func,foreground,background),strout)
+in xps_gc(prim_read_int(strin)) $
+
+xps_color_red = (65535,0,0);
+xps_color_blue = (0,65535,0);
+xps_color_green = (0,0,65535);
+xps_color_cyan = (0,65535,65535);
+xps_color_yellow = (65535,0,65535);
+xps_color_purple = (65535,65535,0);
+
+function xps_color_gc(func,(red,blue,green),wind) 
+: (int,(int,int,int),xps_window) -> xps_gc =
+let 
+    xps_window((strout,strin),(width,height)) = wind;
+    foo = prim_serial_plot_command(13,(func,red,blue,green),strout)
+in xps_gc(prim_read_int(strin)) $
+
+function xps_tile_gc(func,tile,wind) : (int,[int],xps_window) -> xps_gc =
+let 
+    xps_window((strout,strin),(width,height)) = wind;
+    foo = prim_serial_plot_command(10,(func,tile),strout)
+in xps_gc(prim_read_int(strin)) $
+
+function xps_text_gc(func,foreground,background,font,wind) 
+: (int,int,int,[char],xps_window) -> xps_gc =
+let 
+    xps_window((strout,strin),(width,height)) = wind;
+    foo = prim_serial_plot_command(11,(func,foreground,background,font),strout)
+in xps_gc(prim_read_int(strin)) $
+
+
+% 
+;;; DRAWING ROUTINES
+%
+
+function xps_draw_segments(segments,w,gc,wind) 
+: ([((int, int),(int, int))], int, xps_gc, xps_window) -> bool =
+let
+    xps_window((strout,strin),(width,height)) = wind;
+    s1,s2 = unzip(segments);
+    data = w,gc,zip(flip_points(s1,height),flip_points(s2,height));
+in prim_plot_command(2,data,strout) $
+
+function xps_draw_circle(circle,w,gc,wind) 
+: (((int, int),int), int, xps_gc, xps_window) -> bool =
+let
+    xps_window((strout,strin),(width,height)) = wind;
+    (x,y),radius = circle;
+    x,y = flip_point( (x, y) ,height);
+    x,y = x-radius,y-radius;
+    Angle1,Angle2 = 0,360*64;
+    circle = (x,y,radius*2,radius*2,angle1,angle2);
+    data = gc,w,circle;
+in prim_plot_command(3,data,strout) $
+
+function xps_draw_arc(circle,angle1,angle2,w,gc,wind) 
+: (((int, int),int), int,int,int, xps_gc, xps_window) -> bool =
+let
+    xps_window((strout,strin),(width,height)) = wind;
+    (x,y),radius = circle;
+    x,y = flip_point( (x, y) ,height);
+    x,y = x-radius,y-radius;
+    circle = (x,y,radius*2,radius*2,angle1*64,angle2*64);
+    data = gc,w,circle;
+in prim_plot_command(3,data,strout) $
+
+function xps_draw_string(point,string,gc,win) 
+: ((int, int), [char], xps_gc, xps_window) -> bool =
+let
+    xps_window((strout,strin),(width,height)) = win;
+    data = (flip_point(point,height),gc,string);
+in prim_plot_command(5,data,strout) $
+
+function xps_draw_lines(points,w,gc,win) 
+: ([(int, int)], int, xps_gc, xps_window) -> bool =
+let
+    xps_window((strout,strin),(width,height)) = win;
+    data = w,gc,flip_points(points,height)
+in prim_plot_command(1, data,strout) $
+
+function xps_draw_point(point,gc,win) 
+: ((int, int), xps_gc, xps_window) -> bool =
+let
+    xps_window((strout,strin),(width,height)) = win;
+    data = flip_point(point,height),gc
+in prim_plot_command(0, data,strout) $
+
+function xps_draw_rectangle((corner,size),w,gc,win) 
+: (((int,int),(int,int)),int,xps_gc,xps_window) -> bool =
+let 
+    xps_window((strout,strin),(width,height)) = win;
+    data = flip_point(corner,height),size,w,gc
+in prim_plot_command(18,data,strout) $
+
+function xps_draw_image((corner,size),vals,win) 
+: (((int,int),(int,int)), [int], xps_window) -> bool =
+let
+    xps_window((strout,strin),(width,height)) = win;
+    data = (corner,size),vals
+in prim_serial_plot_command(15, data,strout) $
+
+% 
+;;; SHADING ROUTINES
+%
+
+function xps_shade_polygon(points,gc,win) 
+: ([(int,int)], xps_gc, xps_window) -> bool =
+let
+    xps_window((strout,strin),(width,height)) = win;
+    data = gc,flip_points(points,height)
+in prim_plot_command(8,data,strout) $
+
+function xps_shade_rectangle((corner,size),gc,win) =
+let 
+    (x0,y0) = corner;
+    (l,h) = size;
+in xps_shade_polygon([(x0,y0),(x0+l,y0),(x0+l,y0+h),(x0,y0+h)],gc,win) $
+
+function xps_shade_circle(circle,gc,wind)
+: (((int, int),int),  xps_gc, xps_window) -> bool =
+let
+    xps_window((strout,strin),(width,height)) = wind;
+    (x,y),radius = circle;
+    x,y = flip_point( (x, y) ,height);
+    x,y = x-radius,y-radius;
+    Angle1,Angle2 = 0,360*64;
+    circle = (x,y,radius*2,radius*2,angle1,angle2);
+    data = gc,circle;
+in prim_plot_command(7,data,strout) $
+
+
+function xps_draw_arrow(segment,dfp,w,aw,ah,gc,wind) =
+%----- dfp : distance arrow keeps from end points of segment
+         w : arrow body width
+        ah : arrow head height
+        aw : arrow head width
+
+    ------  ah\  |
+    w       -- >
+    ------    /  | aw
+-------------------------------------------------%
+let
+   (x,y),(r,s) = segment;
+   sz = (x-r)^2 + (y-s)^2;
+in
+if sz == 0 then f else
+let
+   sz = sqrt(float(sz));
+   aw = aw/2;
+   linex,liney = -float(x-r)/sz,-float(y-s)/sz;
+   orthox,orthoy= -ceil(float((y-s)*aw)/sz), ceil(float((x-r)*aw)/sz);
+   px,py = r-ceil( float(ah+dfp)*linex), s-ceil(float(ah+dfp)* liney);
+   p1 = px+ orthox, py + orthoy;
+   p2 = px- orthox, py - orthoy;
+   dfp = float(dfp);
+   p3 = r - ceil(dfp*linex), s-ceil(dfp*liney);
+   % finally do arrow head %
+   XX = xps_shade_polygon([p1,p2,p3],gc,wind);
+   % arrow body %
+   ldfp = dfp+float(ah)/2.0;
+   p2 =  r - ceil( linex*ldfp) , s - ceil(liney*ldfp);
+   p1 =  x + ceil( linex*dfp) , y + ceil(liney*dfp);
+in
+  xps_draw_segments([(p1,p2)],w,gc,wind) $
+
+
+% 
+;;; EVENT ROUTINES
+%
+
+xps_event_mask_no_event = 0;
+xps_event_mask_key_press = 1;
+xps_event_mask_key_release = 2;
+xps_event_mask_button_press = 4;
+xps_event_mask_button_release = 8;
+xps_event_mask_enter_window = 16;
+xps_event_mask_leave_window = 32;
+xps_event_mask_pointer_motion = 64;
+xps_event_mask_pointer_motion_hint = 128;
+xps_event_mask_button1_motion = 256;
+xps_event_mask_button2_motion = 512;
+xps_event_mask_button3_motion = 1024;
+
+xps_event_key_press = 2;
+xps_event_key_release = 3;
+xps_event_button_press = 4;
+xps_event_button_release = 5;
+xps_event_motion_notify = 6;
+
+function xps_select_input(i,win) =
+let 
+    xps_window((strout,strin),(width,height)) = win;
+    j = prim_serial_plot_command(19,i,strout);
+in t $
+
+function xps_next_event(win) =
+let 
+    xps_window((strout,strin),(width,height)) = win;
+    j = prim_serial_plot_com(20,strout);
+    type = prim_read_int(strin);
+    pt = flip_point((prim_read_int(strin),prim_read_int(strin)),height);
+    info = (prim_read_int(strin),prim_read_int(strin))
+in (type,pt,info) $
+
+function xps_next_event_noblock(win) =
+let 
+    xps_window((strout,strin),(width,height)) = win;
+    j = prim_serial_plot_com(24,strout);
+    flag = (0 /= prim_read_int(strin));
+    type = prim_read_int(strin);
+    pt = flip_point((prim_read_int(strin),prim_read_int(strin)),height);
+    info = (prim_read_int(strin),prim_read_int(strin))
+in (flag, type,pt,info) $
+
+function xps_next_selected_event(event_type,win) =
+let
+    type,rest = xps_next_event(win)
+in 
+    if plusp(type and event_type) then rest 
+    else xps_next_selected_event(event_type,win) $
+
+function xps_get_box(pt,w,gc,win) =
+let 
+    xps_window((strout,strin),(width,height)) = win;
+    j = prim_serial_plot_command(21,(flip_point(pt,height),w,gc),strout);
+    pt = flip_point((prim_read_int(strin),prim_read_int(strin)),height);
+in pt $
+
+% Old version of get box
+function rect((x0,y0),(x1,y1)) =
+  ((min(x0,x1),min(y0,y1)),(diff(x0,x1),diff(y0,y1))) $
+
+function xps_get_box_r(p0,p1,gcx,win) =
+let 
+    type,p2,(x,button) = xps_next_event(win);
+    foo = xps_draw_rectangle(rect(p0,p1),3,gcx,win)
+in
+    if type == xps_event_button_release then rect(p0,p2)
+    else
+	let foo = xps_draw_rectangle(rect(p0,p2),3,gcx,win)
+	in xps_get_box_r(p0,p2,gcx,win) $
+%
+
+function xps_symbol_from_key(keycode,state,win) : (int,int,xps_window) -> int =
+let
+    xps_window((strout,strin),(width,height)) = win;
+    foo = prim_serial_plot_command(12,(keycode,state),strout)
+in prim_read_int(strin) $
+
+
+% 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; PART 2: BOXES AND SCALING
+;;;   The routines in this section are for building virtual boxes with
+;;;   arbitrary coordinates and then scaling them onto the window coordinates.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+%
+
+datatype scale_box (((int,int),(int,int)),(a,a),float) :: (a in number);
+datatype bound_box((a,a),(a,a)) :: (a in number);
+
+function box_ratio(scale_box(foo,offset,scale)) = 1./scale $
+
+function get_boxsize((maxwidth,maxheight),(width,height)) =
+let
+    ratio = (float(maxwidth)/width)/(float(maxheight)/height)
+in 
+    if (ratio > 1.0)
+    then round(float(maxwidth)/ratio),maxheight
+    else maxwidth,round(float(maxheight)*ratio) $
+
+function make_scale_box(((xx,yy),(width,height)),bbox) =
+let
+    bound_box((x0,y0),(bwidth,bheight)) = bbox;
+    bwidth = float_num(bwidth);  bheight = float_num(bheight);
+    width,height = get_boxsize((width,height),(bwidth,bheight));
+    scale = (float width)/bwidth;
+    offsets = (x0 - float_to_any(float(xx)/scale,x0),
+	       y0 - float_to_any(float(yy)/scale,y0))
+in 
+    (width,height),scale_box(((xx,yy),(width,height)),offsets,scale) $
+
+function bounding_box(points) 
+"Creates a bounding_box to be used by {\\tt make_window}.  Given a
+sequence of points, this box is determined by the maximum and minimum
+x and y values."
+=
+let 
+    xs,ys = unzip(points);
+    x0,y0 = (min_val(xs),min_val(ys));
+    x1,y1 = (max_val(xs),max_val(ys))
+in bound_box((x0,y0),(x1-x0,y1-y0)) $
+
+function scale_point(point,box) =
+let
+    x,y = point;
+    scale_box(foo,(xo,yo),scale) = box
+in 
+    (round(scale*float_num(x-xo)),
+     round(scale*float_num(y-yo))) $
+
+function scale_size(size,box) =
+let
+    w,h = size;
+    scale_box(foo,(xo,yo),scale) = box
+in 
+    (round(scale*float_num(w)),
+     round(scale*float_num(h))) $
+
+function unscale_point(point,box) =
+let
+    x,y = point;
+    scale_box(foo,(xo,yo),scale) = box
+in 
+    (xo + float_to_any(float(x)/scale,xo),
+     yo + float_to_any(float(y)/scale,yo)) $
+
+function unscale_size(size,box) =
+let
+    w,h = size;
+    scale_box(foo,(xo,yo),scale) = box
+in 
+    (float_to_any(float(w)/scale,w),
+     float_to_any(float(h)/scale,h)) $
+
+function xxx_flip_pair(fl,x,y) = if fl then x,y else y,x $
+
+function clip_vert((x1,y1),(x2,y2),(xmin,xmax)) =
+let
+    flip_flag = x1<x2;
+    (x1,y1),(x2,y2) = xxx_flip_pair(flip_flag,(x1,y1),(x2,y2));
+in 
+    if (x2 < xmin) or (x1 > xmax) 
+    then ((x1,y1),(x2,y2)),f
+    else
+	let 
+	    (x1,y1),(x2,y2) = if x1<xmin 
+  			      then ((xmin,y1 + (y2-y1)*(xmin-x1)/(x2-x1)),
+				    (x2,y2))
+	                      else ((x1,y1),(x2,y2));
+            (x1,y1),(x2,y2) = if x2>xmax
+                              then ((x1,y1),
+			            (xmax,y1 + (y2-y1)*(xmax-x1)/(x2-x1)))
+		              else ((x1,y1),(x2,y2))
+    in xxx_flip_pair(flip_flag,(x1,y1),(x2,y2)),t $
+
+function clip(((x1,y1),(x2,y2)),((xmin,ymin),(xmax,ymax))) =
+let
+    ((x1,y1),(x2,y2)),fl1 = clip_vert((x1,y1),(x2,y2),(xmin,xmax));
+    ((y1,x1),(y2,x2)),fl2 = clip_vert((y1,x1),(y2,x2),(ymin,ymax));
+in ((x1,y1),(x2,y2)),fl1 and fl2 $
+
+function scale_and_clip_segment((p1,p2),box) =
+let 
+    p1,p2 = scale_point(p1,box),scale_point(p2,box);
+    scale_box(((xmin,ymin),(width,height)),foo) = box
+in
+    clip((p1,p2),((xmin,ymin),(xmin+width,ymin+height))) $
+
+function in_scale_box_p(point,box) =
+let
+    scale_box(((xmin,ymin),(width,height)),foo) = box;
+    x,y = scale_point(point,box)
+in not(x < xmin or x > xmin+width or y < ymin or y > ymin+height) $
+
+% 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; PART 3: THE OLD WINDOW INTERFACE
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+%
+
+datatype window(xps_window,scale_box(a),xps_gc) :: (a in number) $
+
+function make_window((offset,size),bbox,title,display) 
+"Creates a window on the display specified by {\\tt display}.  Its
+upper left hand corner will be at position ({\\tt x0},{\\tt y0}) on
+the screen and will have a size as specified by {\\tt width} and
+{\\tt height}.  The {\\tt bbox} argument specifies the bounding box
+for the data to be plotted in the window.  The bounding box is a
+structure that specifies the virtual coordinates of the window.  It
+can be created with the function {\\tt bounding_box}.  The
+{\\tt title} argument specifies a title for the window.  Note that
+windows get automatically closed when you return to top-level.  This
+means that you cannot return a window to top-level and then use
+it---you must create it and use it within a single top-level call."
+=
+let
+    actual_size,box = make_scale_box(((0,0),size),bbox);
+    win,(fl,line) = xps_make_window((offset,actual_size),title,display);
+    foo = if not(fl) 
+          then print_line("ERROR: make_window failed" ++ [newline] ++ line)
+	  else t;
+    gc = xps_line_gc(xps_func_copy,xps_white_pixel(win),xps_black_pixel(win),
+		     win)
+in window(win,box,gc) $
+
+function make_ps_window((offset,size),bbox,filename) 
+"Analogous to {\\tt make_window}, except that it creates a postscript
+file from the drawing commands used with the window.  The arguments
+{\\tt x0}, {\\tt y0}, {\\tt width}, and {\\tt height} refer to positions
+on the page from the lower left corner, in points.  The two commands
+{\\tt get_mouse_info} and {\\tt clear_window} cannot be used with
+a postscript window.  You must explicitly use {\\tt close_window}
+to properly terminate the file."
+=
+let
+    actual_size,box = make_scale_box(((0,0),size),bbox);
+    win,(fl,line) = xps_make_ps_window((offset,actual_size),filename);
+    foo = if not(fl) 
+          then print_line("ERROR: make_window failed" ++ [newline] ++ line)
+	  else t
+in window(win,box,xps_gc(0)) $
+
+default_window = ((500,0),(500,500));
+
+function draw_points(points,window) 
+"Draws a sequence of points into the window specified by {\\tt window}.
+The window must have been created by {\\tt make_window}."
+= 
+let 
+    window(win,box,gc) = window;
+in {xps_draw_point(scale_point(pt,box),gc,win): pt in points} $
+
+function draw_string(point, string, window)
+"Draws a character string from the {\\tt string} argument into the 
+window specified by {\\tt window} at the coordinate given by {\\tt point} 
+(lower left corner of each string)."
+=
+let 
+    window(win,box,gc) = window;
+in xps_draw_string(scale_point(point,box),string,gc,win) $
+
+function draw_strings(points,strings,window) =
+   {draw_string(pt,str,window): pt in points; str in strings} $
+
+function draw_lines(points, width, window) 
+"Draws a sequence of lines between the points in the {\\tt points}
+argument into the window specified by {\\tt window}.  A line is drawn
+from each element in {\\tt points} to the next element in {\\tt points}.
+For a sequence of length L, a total of L-1 lines will be drawn (no
+line is drawn from the last point).
+The {\\tt width} argument specifies the width of the lines in pixels."
+=
+let 
+    window(win,box,gc) = window;
+in xps_draw_lines({scale_point(pt,box):pt in points},width,gc,win) $
+
+function draw_segments(segs,width,window) 
+"Draws a sequence of line segments into the window specified by
+{\\tt window}.  Each line-segment is specified as a pair of points.
+The {\\tt width} argument specifies the width of the lines in pixels."
+=
+let
+    window(win,box,gc) = window;
+    pts = {scale_point(pt1,box),scale_point(pt2,box): (pt1,pt2) in segs}
+in xps_draw_segments(pts,width,gc,win) $
+
+function get_mouse_info(window) 
+  "Gets information from clicking on a window with the mouse.  It returns
+(x,y,button,control).  The x,y are coordinates relative to the windows
+bounding box.  The button specifies which button, and the control specifies
+whether any control keys where being processed."
+=
+let
+    window(win,box,gc) = window;
+    mask = xps_event_mask_button_press;
+    foo = xps_select_input(mask,win);
+    type,pt,cntl,but = xps_next_event(win);
+    foo = xps_select_input(0,win);
+    x,y = unscale_point(pt,box)
+in x,y,but,cntl $
+
+function close_window(window) 
+"Closes a window created with {\\tt make_window}.  After executing
+this command, the window will not accept any more of the draw
+commands, and will go away if you mouse on it."
+=
+let window(win,box,gc) = window in xps_close_window(win) $
+
+function clear_window(window) 
+"Clears a window created with make_window."
+=
+let window(win,box,gc) = window in xps_clear_window(win) $
+
+function kill_window(window) 
+"Kills a window created with {\\tt make_window}.  After executing
+this command, the window will go away immediately."
+=
+let window(win,box,gc) = window in xps_kill_window(win) $
+
+
+% 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; PART 4: THE NEW TEMPLATE BASED WINDOW INTERFACE (design in progress)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+%
+
+function get_keys(result,win,gc,lgc,dgc,(l,h),x,y) =
+let 
+    foo = xps_shade_rectangle(((x,y-3),(l,h)),lgc,win);
+    (type,pt,state,keycode) = xps_next_event(win);
+    foo = xps_shade_rectangle(((x,y-3),(l,h)),dgc,win);
+    char = xps_symbol_from_key(keycode,state,win)
+in 
+    if (char == 65293) then result
+    else 
+	if ((char == 65288) or (char == 65535))
+	then 
+	    if (#result == 0) then get_keys(result,win,gc,lgc,dgc,(l,h),x,y)
+	    else get_keys(drop(result,-1),win,gc,lgc,dgc,(l,h),x-l,y)
+	else 
+	    if ((char <= 0) or (char >= 128))
+	    then get_keys(result,win,gc,lgc,dgc,(l,h),x,y)
+	    else
+		let 
+		    char = code_char(char);
+		    foo = xps_draw_string((x,y),[char],gc,win)
+		in get_keys(result++[char],win,gc,lgc,dgc,(l,h),x+l,y) $
+
+function key_char(code,state,win) = 
+  code_char(xps_symbol_from_key(code,state,win)) $
+
+function read_plot_line(pt,size,char_gc,back_gc,win) =
+let
+    foo = xps_select_input(xps_event_mask_key_press,win);
+    result = get_keys("",win,char_gc,char_gc,back_gc,size,pt);
+    foo = xps_select_input(xps_event_mask_no_event,win);
+in result $
+
+function text_window(lines,offset,(font,fontsize),title,display) = 
+let
+    font_width,font_height = fontsize;
+    line_spacing = font_height + 2;
+    width = 10 + font_width*max_val({#line: line in lines});
+    height = 10 + line_spacing * #lines;
+    win,stype,(efl,estring) = xps_nmake_window((offset,(width,height)),
+					       title,display,stderr);
+in
+    if not(efl) then (efl,estring)
+    else
+	let
+	    gc = xps_text_gc(xps_func_copy,xps_white_pixel(win),
+			     xps_black_pixel(win),font,win);
+	    foo = xps_select_input(xps_event_mask_button_press,win);
+	    foo = {xps_draw_string((5,height-3-line_spacing*(i+1)),line,gc,win)
+		   : line in lines; i in [0:#lines]};
+	    type,rest = xps_next_event(win);
+	    foo = xps_kill_window(win)
+    in (t,"") $
+
+function text_to_window(lines,offset,line_spacing,gc,win) =
+let
+    xo,yo = offset
+in {xps_draw_string((xo,yo-line_spacing*(i+1)),line,gc,win)
+		   : line in lines; i in [0:#lines]} $
+
+%
+
+function testing(foo) =
+let
+    win,errinfo = xps_make_window(((0,0),(500,500)),"foo",display);
+    black= xps_black_pixel(win);
+    white= xps_white_pixel(win);
+    wh_gc = xps_line_gc(xps_func_copy,white,black,win);
+    bl_gc = xps_line_gc(xps_func_copy,black,white,win);
+    lgc = read_plot_line((0,0),(6,12),wh_gc,bl_gc,win)
+in lgc $
+
+%

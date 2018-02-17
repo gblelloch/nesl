@@ -1,0 +1,9 @@
+function qsort(x) =
+if (#x < 2) then x
+else
+  let pivot   = x[#x/2];
+      lesser  = {e in x| e < pivot};
+      equal   = {e in x| e == pivot};
+      greater = {e in x| e > pivot};
+      result  = {qsort(v): v in [lesser,greater]};
+  in result[0] ++ equal ++ result[1];

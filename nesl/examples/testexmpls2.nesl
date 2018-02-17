@@ -1,0 +1,31 @@
+dir = "/afs/cs.cmu.edu/project/scandal/nesl/current/examples/";
+
+load dir ++ "adaptive-integration.nesl";
+load dir ++ "awerbuch-shiloach.nesl";
+
+function test(str, v) =
+  let 
+    t1 = print_string(str); 
+    t2 = if v
+         then print_string(" passed")
+         else print_string("........FAILED"); 
+    t3 = print_char(`
+)
+  in 0 $
+
+
+function f1(x) = 3. * x + expt(x,2.);
+
+function testexamps2(a) =
+  let 
+    result = integrate1(f1,(3.0, 5.0));
+    foo = test("INTEGRATE1", ((result > 56.655) and (result < 56.656)));
+    result = integrate2(f1,(3.0, 5.0));
+    foo = test("INTEGRATE2", ((result > 56.6624) and (result < 56.66242)));
+    foo = test("AWERBUCH-SHILOACH",
+	       eql(ConCompFull([1, 5, 1,  6, 4, 13,  2,  2, 9, 12, 8, 3],
+			      [5, 6, 6, 10, 5,  4, 13, 11, 2,  9, 9, 7]),
+		   [0, 1, 1, 3, 1, 1, 1, 3, 1, 1, 1, 1, 1, 1]));
+  in 0 $
+
+testexamps2(0) $

@@ -1,0 +1,102 @@
+%
+This file tests the toplevel commands of nesl.
+%
+
+print_line("
+
+LOAD TESTS");
+
+loadfile = "../../../3.1/src/testload";
+
+print_line("
+Load with verbose and no print (default)");
+
+load(loadfile);
+
+print_line("
+Load with verbose and print");
+
+load(loadfile, print := t);
+
+print_line("
+Load with no verbose and print");
+
+load(loadfile, verbose := f, print := t);
+
+print_line("
+Load with no verbose and no print");
+
+load(loadfile, verbose := f);
+
+
+print_line("
+
+DESCRIBE TESTS");
+
+print_line("
+Describe +.");
+describe +;
+
+%
+print_line("
+Describe nesl_path (a variable).");
+describe nesl_path;
+%
+
+print_line("
+Describe wombat_foo (a nonexisting function).");
+describe wombat_foo;
+
+
+print_line("
+
+SHOW CODE TESTS");
+
+print_line("
+Show code intersection.");
+show code intersection;
+
+print_line("
+Show code + (primitive).");
+show code +;
+
+%
+print_line("
+Show code nesl_path (variable).");
+show code nesl_path;
+%
+
+print_line("
+The following two should give errors.");
+
+show code wombat_foo_bar;
+
+show code;
+
+
+print_line("
+
+PRINT LENGTH TEST");
+
+set print_length 0;
+"Length = 0";
+dist(1,100);
+
+set print_length 10;
+"Length = 10";
+dist(1,100);
+
+set print_length 100;
+"Length = 100";
+dist(1,100);
+
+
+
+print_line("
+
+TEST FILE VARIABLES");
+
+print_line("
+Assigning to file variable a. Should give an error.");
+a |= dist(1,500000);
+

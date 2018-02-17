@@ -1,0 +1,1175 @@
+;;;
+;;; Copyright (c) 1992 Carnegie Mellon University 
+;;;                    SCAL project: Guy Blelloch, Siddhartha Chatterjee,
+;;;                                  Jonathan Hardwick, Jay Sipelstein,
+;;;                                  Marco Zagha
+;;; All Rights Reserved.
+;;;
+;;; Permission to use, copy, modify and distribute this software and its
+;;; documentation is hereby granted, provided that both the copyright
+;;; notice and this permission notice appear in all copies of the
+;;; software, derivative works or modified versions, and any portions
+;;; thereof, and that both notices appear in supporting documentation.
+;;;
+;;; CARNEGIE MELLON ALLOWS FREE USE OF THIS SOFTWARE IN ITS "AS IS"
+;;; CONDITION.  CARNEGIE MELLON DISCLAIMS ANY LIABILITY OF ANY KIND FOR
+;;; ANY DAMAGES WHATSOEVER RESULTING FROM THE USE OF THIS SOFTWARE.
+;;;
+;;; The SCAL project requests users of this software to return to 
+;;;
+;;;  Guy Blelloch				guy.blelloch@cs.cmu.edu
+;;;  School of Computer Science
+;;;  Carnegie Mellon University
+;;;  5000 Forbes Ave.
+;;;  Pittsburgh PA 15213-3890
+;;;
+;;; any improvements or extensions that they make and grant Carnegie Mellon
+;;; the rights to redistribute these changes.
+;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; STUBS
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defop (partition v counts) ! ((v.v.alpha <- v.alpha v.int) (alpha any)) :stub)
+
+(defop (flatten v) ! ((v.alpha <- v.v.alpha) (alpha any)) :stub)
+
+(defop (permute_nocheck v i) ! ((v.alpha <- v.alpha v.int) (alpha any)) :stub)
+
+(defop (rep d v i) ! ((v.alpha <- v.alpha alpha int) (alpha any)) :stub)
+
+(defop (plus_scan a) ! ((v.alpha <- v.alpha) (alpha number)) :stub)
+
+(defop (elt_nocheck a i) ! ((alpha <- v.alpha int) (alpha any)) :stub)
+
+(defop (prim-+-reduce v) ! ((int <- int segdes)) :stub)
+
+(defop (dist a l) ! ((v.alpha <- alpha int) (alpha any)) :stub)
+
+(defop (get_nocheck values indices) ! ((v.alpha <- v.alpha v.int) (alpha any))
+  :stub)
+
+(defop (get values indices) ! ((v.alpha <- v.alpha v.int) (alpha any))
+  :stub)
+
+(defop (hashinternal a) ! ((int <- alpha) (alpha any)) :stub)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;; LENGTH AND SEGMENT DESCRIPTORS
+;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defop (prim_length v) ! ((int <- alpha) (alpha any))
+  (base-typecase alpha
+    (int   (:primitive (LENGTH INT)))
+    (float (:primitive (LENGTH FLOAT)))
+    (char  (:primitive (LENGTH INT)))
+    (bool  (:primitive (LENGTH BOOL)))))
+
+(defop (make-segdes int) ! ((segdes <- int))
+  (:primitive (MAKE_SEGDES)))
+
+(defop (make_segdes int) ! ((segdes <- int))
+  (:primitive (MAKE_SEGDES)))
+
+(defop (prim-count v seg) ! ((int <- bool segdes))
+  (prim-+-reduce (btoi v) seg))
+       
+(defop (prim-seg-lengths segdes) ! ((int <- segdes))
+  (:primitive (LENGTHS)))
+
+(defop (length v) ! ((int <- v.alpha) (alpha any))
+  (with (((vector segdes values) v))
+    (prim-seg-lengths segdes))
+  :shortdoc "Return length of sequence v."
+  :documentation "Returns the length of a sequence."
+  :infix |#|)
+
+(defop (|#| v) ! ((int <- v.alpha) (alpha any))
+  (with (((vector segdes values) v))
+    (prim-seg-lengths segdes))
+  :shortdoc "Return length of sequence v."
+  :documentation "Returns the length of a sequence."
+  :infix |#|
+  :name vec-len)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;; DISTRIBUTION
+;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defop (prim-dist-scalar a segdes) ! ((alpha <- alpha segdes) (alpha any))
+  (base-typecase alpha
+    (int   (:primitive (DIST INT)))
+    (float (:primitive (DIST FLOAT)))
+    (char  (:primitive (DIST INT)))
+    (bool  (:primitive (DIST BOOL)))))
+
+(defop (transpose-index len seg segs2) ! ((int <- int segdes segdes))
+  (with ((ind (prim-iseq 0 1 seg))
+	 (llen (prim-dist-scalar len seg)))
+    (prim-iseq ind llen segs2)))
+
+(defop (prim-dist a segdes) ! ((alpha <- alpha segdes) (alpha any))
+  (poly-typecase alpha
+    (prim-dist-scalar a segdes)
+    (with ((i (prim-seg-lengths segdes))
+	   ((vector sega vala) a)
+	   (l (prim-seg-lengths sega))
+	   ((vector ignore (pair segs2 vals) )
+	    (over ((v a)) 
+		  (with ((seg (make-segdes i)))
+		    (pair seg (prim-dist v seg)))))
+	   (idx (transpose-index l sega segs2))
+	   (seg (make-segdes (* i l)))
+	   ((vector seg vals)
+	    (permute_nocheck (vector seg vals) (vector seg idx)))
+	   (newseg (make-segdes (prim-dist-scalar l segdes))))
+      (vector newseg vals))))
+
+(defop (dist a l) ! ((v.alpha <- alpha int) (alpha any))
+  (with ((segdes (make-segdes l)))
+    (vector segdes (prim-dist a segdes)))
+  :documentation
+  "Generates a sequence of length {\\tt l} with the value {\\tt a}
+in each element."
+  :shortdoc "Distribute value a to sequence of length l."
+  :example
+  ((a0 a0 a0 a0 a0) <- a0 5))
+
+(defop (seq_dist a l) ! ((v.alpha <- alpha int) (alpha any))
+  (with ((segdes (make-segdes l)))
+    (vector segdes (prim-dist a segdes))))
+
+(defop (dist-l v w) ! ((v.alpha <- alpha v.beta) (alpha any) (beta any))
+  (with (((vector w-segdes junk) w))
+    (vector w-segdes (prim-dist v w-segdes))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;; INDEX
+;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defop (prim-iseq init stride segdes) ! ((int <- int int segdes))
+   (:primitive (INDEX)))
+
+(defop (index-l (vector seg val)) ! ((v.int <- v.alpha) (alpha any))
+  (vector seg (prim-iseq 0 1 seg)))
+
+(defop (index l) ! ((v.int <- int))
+  (with ((seg (make-segdes l)))
+    (vector seg (prim-iseq 0 1 seg)))
+  :documentation
+"Given an integer, {\\tt index} returns a sequence of
+that length with consecutive integers starting at 0
+in the elements."
+  :shortdoc "Generate an index sequence of length l."
+  :example
+  ((0 1 2 3 4 5 6 7) <- 8)
+  :redefine no)
+
+(defop (iseq-l s d vec)
+  (with (((vector seg val) vec))
+    (vector seg (prim-iseq s d seg))))
+
+(defop (iseq1 s e)
+  (with ((seg (make-segdes (- e s))))
+    (vector seg (prim-iseq s 1 seg))))
+
+(defop (iseqm1 s e)
+  (with ((seg (make-segdes (- s e))))
+    (vector seg (prim-iseq s -1 seg))))
+
+(defop (iseq s d e)
+  (with ((len (/ (+ (- (- e s) 1) d) d))
+	 (seg (make-segdes len)))
+    (vector seg (prim-iseq s d seg)))
+   :documentation
+"Returns a set of indices starting at {\\tt s}, increasing
+by {\\tt d}, and finishing before {\\tt e}."
+  :shortdoc "Return integer sequence from s to e by d. "
+   :example
+   ((4 7 10 13) <- 4 3 15)
+  :argcheck ((or (< d 1) (> s e))
+	     "In [s:e:l], e must be >= to s, and l must be positive."))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;; REPLACE
+;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defop (prim-rep-scalar D I V S) ! 
+	((alpha <- alpha int alpha segdes) (alpha any))
+  (base-typecase alpha
+    (int   (:primitive (REPLACE INT)))
+    (float (:primitive (REPLACE FLOAT)))
+    (char  (:primitive (REPLACE INT)))
+    (bool  (:primitive (REPLACE BOOL)))))
+
+(defop (positions-from-offsets offsets vals) 
+  ! ((v.int <- v.int v.v.alpha) (alpha any))
+  (flatten (over ((o offsets) (v vals))
+	     (iseq-l o 1 v))))
+
+(defop (segrep dest val index)
+  ! ((v.v.alpha <- v.v.alpha v.alpha int) (alpha any))
+  (with ((dflag (rep (dist-l t dest) f index))
+	 (lengths (rep (v.length dest) (length val) index))
+	 (offset (plus_scan lengths))
+	 (soff (elt_nocheck offset index))
+	 (spos (iseq-l soff 1 val))
+	 (dvals (old-pack dest dflag))
+	 (dpos (positions-from-offsets (old-pack offset dflag) dvals)))
+    (partition (join val spos (flatten dvals) dpos)
+	       lengths)))
+
+(defop (rep d v i) ! ((v.alpha <- v.alpha alpha int) (alpha any))
+  (poly-typecase alpha
+    (with (((vector seg vect) d))
+      (vector seg (prim-rep-scalar vect i v seg)))
+    (segrep d v i))
+  :documentation
+  "Replaces the {\\tt i}th value in the sequence {\\tt d} with the
+value {\\tt v}."
+  :shortdoc "Replace element at position i of d with v."
+  :example
+  ((a0 a1 a2 b0 a4) <- (a0 a1 a2 a3 a4) b0 3)
+)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;; EXTRACTION (ELT)
+;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defop (prim-extract V I S) ! ((alpha <- alpha int segdes) (alpha any))
+  (base-typecase alpha
+    (int   (:primitive (EXTRACT INT)))
+    (float (:primitive (EXTRACT FLOAT)))
+    (char  (:primitive (EXTRACT INT)))
+    (bool  (:primitive (EXTRACT BOOL)))))
+
+(defop (elt-indices seg-lengths i) ! ((v.int <- v.int int))
+  (with ((offset (elt_nocheck (plus_scan seg-lengths) i))
+	 (length (elt_nocheck seg-lengths i)))
+    (iseq1 offset (+ offset length))))
+
+(defop (elt_nocheck a i) ! ((alpha <- v.alpha int) (alpha any))
+  (poly-typecase alpha
+    (with (((vector seg val) a)) (prim-extract val i seg))
+    (get_nocheck (flatten a) (elt-indices (v.length a) i))))
+
+(defop (elt a i)
+  (elt_nocheck a i)
+  :documentation
+  "Extracts the element specified by index {\\tt i} from the
+sequence {\\tt a}.  Indices are zero-based."
+  :shortdoc "Return element at position i of a."
+  :argcheck ((or (< i 0) (>= i (length a)))
+	     "Sequence reference (a[i]) out of bounds."))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;; SCANS
+;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defop (plus_scan a) ! ((v.alpha <- v.alpha) (alpha number))
+  (base-typecase alpha
+    (int (:primitive (COPY 1 1) (+_SCAN INT)))
+    (float (:primitive (COPY 1 1) (+_SCAN FLOAT))))
+  :documentation
+"Given a sequence of numbers, {\\tt plus_scan} returns to each position
+of a new equal-length sequence, the sum of all previous
+positions in the source."
+  :example
+  ((0 1 4 9 16 25 36 49) <-
+   (1 3 5 7 9 11 13 15)))
+
+(defop (max_scan a) ! ((v.alpha <- v.alpha) (alpha ordinal))
+  (base-typecase alpha
+    (int (:primitive (COPY 1 1) (MAX_SCAN INT)))
+    (float (:primitive (COPY 1 1) (MAX_SCAN FLOAT)))
+    (char (:primitive (COPY 1 1) (MAX_SCAN INT))))
+  :documentation
+"Given a sequence of ordinals, {\\tt max_scan} returns to each position
+of a new equal-length sequence, the maximum of all previous
+positions in the source."
+  :example
+  ((minf 3 3 3 6 6 6) <-
+   (3 2 1 6 5 4 8)))
+
+(defop (min_scan a) ! ((v.alpha <- v.alpha) (alpha ordinal))
+  (base-typecase alpha
+    (int (:primitive (COPY 1 1) (MIN_SCAN INT)))
+    (float (:primitive (COPY 1 1) (MIN_SCAN FLOAT)))
+    (char (:primitive (COPY 1 1) (MIN_SCAN INT))))
+  :documentation
+"Given a sequence of ordinals, {\\tt min_scan} returns to each position
+of a new equal-length sequence, the minimum of all previous
+positions in the source.")
+
+(defop (mult_scan a) ! ((v.alpha <- v.alpha) (alpha number))
+  (base-typecase alpha
+    (int (:primitive (COPY 1 1) (*_SCAN INT)))
+    (float (:primitive (COPY 1 1) (*_SCAN FLOAT))))
+  :documentation
+"Given a sequence of numbers, {\\tt mult_scan} returns to each position
+of a new equal-length sequence, the product of all previous
+positions in the source.")
+
+(defop (or_scan a) ! ((v.alpha <- v.alpha) (alpha logical))
+  (base-typecase alpha
+    (int    (:primitive (COPY 1 1) (OR_SCAN INT)))
+    (bool   (:primitive (COPY 1 1) (OR_SCAN BOOL))))
+  :documentation
+"A scan using logical-or on a sequence of logicals.")
+
+(defop (and_scan a) ! ((v.alpha <- v.alpha) (alpha logical))
+  (base-typecase alpha
+    (int    (:primitive (COPY 1 1) (AND_SCAN INT)))
+    (bool   (:primitive (COPY 1 1) (AND_SCAN BOOL))))
+  :documentation
+"A scan using logical-and on a sequence of logicals.")
+
+(defop (xor_scan a) ! ((v.alpha <- v.alpha) (alpha logical))
+  (base-typecase alpha
+    (int    (:primitive (COPY 1 1) (XOR_SCAN INT)))
+    (bool   (:primitive (COPY 1 1) (XOR_SCAN BOOL))))
+  :documentation
+"A scan using logical-xor on a sequence of logicals.")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;; REDUCES
+;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defop (sum v) ! ((alpha <- v.alpha) (alpha number))
+  (base-typecase alpha
+    (int   (:primitive (COPY 1 1) (+_REDUCE INT) (POP 1 1)))
+    (float (:primitive (COPY 1 1) (+_REDUCE FLOAT) (POP 1 1))))
+  :documentation
+"Given a sequence of numbers, {\\tt sum} returns
+their sum."
+  :example
+  (32 <- (7 2 9 11 3))
+  :redefine no)
+
+(defop (product v) ! ((alpha <- v.alpha) (alpha number))
+  (base-typecase alpha
+    (int   (:primitive (COPY 1 1) (*_REDUCE INT) (POP 1 1)))
+    (float (:primitive (COPY 1 1) (*_REDUCE FLOAT) (POP 1 1))))
+  :documentation
+"Given a sequence of numbers, {\\tt sum} returns their product.")
+
+(defop (prim-+-reduce v) ! ((int <- int segdes))
+  (:primitive (+_REDUCE INT)))
+
+(defop (max_val v) ! ((alpha <- v.alpha) (alpha ordinal))
+  (base-typecase alpha
+    (int   (:primitive (COPY 1 1) (MAX_REDUCE INT) (POP 1 1)))
+    (float (:primitive (COPY 1 1) (MAX_REDUCE FLOAT) (POP 1 1)))
+    (char  (:primitive (COPY 1 1) (MAX_REDUCE INT) (POP 1 1))))
+  :documentation
+  "Given a sequence of ordinals, {\\tt max_val} returns
+their maximum."
+  :redefine no)
+
+(defop (min_val v) ! ((alpha <- v.alpha) (alpha ordinal))
+  (base-typecase alpha
+    (int   (:primitive (COPY 1 1) (MIN_REDUCE INT) (POP 1 1)))
+    (float (:primitive (COPY 1 1) (MIN_REDUCE FLOAT) (POP 1 1)))
+    (char  (:primitive (COPY 1 1) (MIN_REDUCE INT) (POP 1 1))))
+  :documentation
+  "See max_val."
+  :redefine no)
+
+(defop (any v) ! ((alpha <- v.alpha) (alpha logical))
+  (base-typecase alpha
+    (int    (:primitive (COPY 1 1) (OR_REDUCE INT) (POP 1 1)))
+    (bool   (:primitive (COPY 1 1) (OR_REDUCE BOOL) (POP 1 1))))  
+  :documentation
+  "Given a sequence of booleans, {\\tt any} returns t iff any of
+them are t."
+  :redefine no)
+
+(defop (all v)  ! ((alpha <- v.alpha) (alpha logical))
+  (base-typecase alpha
+    (int    (:primitive (COPY 1 1) (AND_REDUCE INT) (POP 1 1)))
+    (bool   (:primitive (COPY 1 1) (AND_REDUCE BOOL) (POP 1 1))))
+  :documentation
+  "Given a sequence of booleans, {\\tt all} returns t iff all of
+them are t."
+  :redefine no)
+
+(defop (parity v) ! ((alpha <- v.alpha) (alpha logical))
+  (base-typecase alpha
+    (int    (:primitive (COPY 1 1) (XOR_REDUCE INT) (POP 1 1)))
+    (bool   (:primitive (COPY 1 1) (XOR_REDUCE BOOL) (POP 1 1))))
+  :documentation
+  "Given a sequence of booleans, {\\tt all} returns the parity of the
+sequence.")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;; PERMUTE
+;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defop (prim-permute-scalar v i vs) ! 
+	((alpha <- alpha int segdes) (alpha any))
+  (base-typecase alpha
+    (int   (:primitive (PERMUTE INT)))
+    (float (:primitive (PERMUTE FLOAT)))
+    (char  (:primitive (PERMUTE INT)))
+    (bool  (:primitive (PERMUTE BOOL)))))
+
+(defop (segpermute vals i)
+  ! ((v.v.alpha <- v.v.alpha v.int) (alpha any))
+  (with ((lengths (permute_nocheck (v.length vals) i))
+	 (offset (plus_scan lengths))
+	 (positions (positions-from-offsets (get_nocheck offset i) vals)))
+    (partition (permute_nocheck (flatten vals) positions)
+	       lengths)))
+
+(defop (permute_nocheck v i) ! ((v.alpha <- v.alpha v.int) (alpha any))
+  (poly-typecase alpha
+    (with (((vector seg v) v)
+	   ((vector iseg ivals) i))
+      (vector seg (prim-permute-scalar v ivals seg)))
+    (segpermute v i)))
+
+(defop (permute v i)
+  (permute_nocheck v i)
+  :documentation  
+"Given a sequence {\\tt v} and a sequence of indices {\\tt i},
+which must be of the same length, {\\tt permute} permutes the
+values to the given indices.  The permutation must be one-to-one."
+  :shortdoc "Permute elements of sequence v to positions i."
+  :argcheck ((with ((l (length v))) 
+		   (or (any (over ((i i)) (or (< i 0) (>= i l))))
+		       (/= (length v) (length i))))
+	     "Bad arguments to function PERMUTE."))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;; GET ->
+;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defop (prim-get-scalar v i ss ds) ! 
+  ((alpha <- alpha int segdes segdes) (alpha any))
+  (base-typecase alpha
+    (int   (:primitive (BPERMUTE INT)))
+    (float (:primitive (BPERMUTE FLOAT)))
+    (char  (:primitive (BPERMUTE INT)))
+    (bool  (:primitive (BPERMUTE BOOL)))))
+
+(defop (segget a i) ! ((v.v.alpha <- v.v.alpha v.int) (alpha any))
+  (with ((alengths (v.length a))
+	 (aoffsets (plus_scan alengths))
+	 (lengths (get_nocheck alengths i))
+	 (offsets (flatten (over ((off (get_nocheck aoffsets i))
+				  (len lengths))
+				 (iseq1 off (+ len off))))))
+    (partition (get_nocheck (flatten a) offsets) lengths)))
+
+(defop (get_nocheck values indices) ! ((v.alpha <- v.alpha v.int) (alpha any))
+  (poly-typecase alpha
+    (with (((vector seg vals) values)
+	   ((vector segi valsi) indices))
+      (vector segi (prim-get-scalar vals valsi seg segi)))
+    (segget values indices)))
+
+(defop (-> values indices)
+  (get_nocheck values indices)
+  :example
+  ((a3 a5 a2 a6) <-
+   (a0 a1 a2 a3 a4 a5 a6 a7)
+   (3 5 2 6)
+   (t t t t))
+  :documentation
+"Given a sequence of {\\tt values} on the left and a sequence of
+{\\tt indices} on the right, which can be of different lengths,
+{\\tt ->} returns a sequence which is the same length as the
+{\\tt indices} sequence and the same type as the {\\tt values} sequence.
+For each position in the {\\tt indices} sequence, it reads the value
+at that index of the {\\tt values} sequence."
+  :shortdoc "Get values from sequence a based on indices i."
+  :infix ->
+  :argcheck ((with ((l (length values))) 
+		(any (over ((i indices)) (or (< i 0) (>= i l)))))
+	     "Index out of bounds for function ->."))
+
+(defop (read values indices) (-> values indices)
+  :documentation
+  "This is the same as {\tt values -> indices}.")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;; PUT
+;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defop (prim-put-scalar v i d vs ds) ! 
+	((alpha <- alpha int alpha segdes segdes) (alpha any))
+  (base-typecase alpha
+    (int   (:primitive (DPERMUTE INT)))
+    (float (:primitive (DPERMUTE FLOAT)))
+    (char  (:primitive (DPERMUTE INT)))
+    (bool  (:primitive (DPERMUTE BOOL)))))
+
+(defop (put-scalar v i d) ! ((v.alpha <- v.alpha v.int v.alpha) (alpha any))
+  (with (((vector vs vdata) v)
+	 ((vector is idata) i)
+	 ((vector ds ddata) d))
+    (vector ds (prim-put-scalar vdata idata ddata vs ds))))
+
+(defop (segput vals i def) 
+  ! ((v.v.alpha <- v.v.alpha v.int v.v.alpha) (alpha any))
+  (with ((idx (index-l i))
+	 (tmp (put idx i (dist-l -1 def)))
+	 (dflag (v.< tmp v.0))
+	 (flg (v.= idx (get_nocheck tmp i)))
+	 ((pair newvals newi )
+	  (if (not (all flg))
+	      (pair (old-pack vals flg) (old-pack i flg))
+	    (pair vals i)))
+	 (lengths (put (v.length newvals) newi (v.length def)))
+	 (offset (plus_scan lengths))
+	 (spos (positions-from-offsets (get_nocheck offset newi) newvals))
+	 (dvals (old-pack def dflag))
+	 (dpos (positions-from-offsets (old-pack offset dflag) dvals)))
+    (partition (join (flatten newvals) spos (flatten dvals) dpos)
+	       lengths)))
+
+(defop (put v i d) !
+	((v.alpha <- v.alpha v.int v.alpha) (alpha any))
+  (poly-typecase alpha
+    (put-scalar v i d)
+    (segput v i d))
+  :documentation
+"Given a sequence {\\tt v} and a sequence of indices {\\tt i},
+which must be of the same length, {\\tt put} places the
+values to the given indices in the {\\tt d} sequence.  
+All indices in {\\tt i} must be in the range from 0 to
+one less than the length of {\\tt d}."
+  :shortdoc "Place elements v in d based on indices i."
+  :example
+  ((b0 a0 a2 a3 b4 a1) <-
+   (a0 a1 a2 a3)
+   (1 5 2 3)
+   (b0 b1 b2 b3 b4 b5))
+  :redefine no)
+
+(defop (segput-nocolision vals i def) 
+  ! ((v.v.alpha <- v.v.alpha v.int v.v.alpha) (alpha any))
+  (with ((dflag (put (dist-l f i) i (dist-l t def)))
+	 (lengths (put (v.length vals) i (v.length def)))
+	 (offset (plus_scan lengths))
+	 (spos (positions-from-offsets (get_nocheck offset i) vals))
+	 (dvals (old-pack def dflag))
+	 (dpos (positions-from-offsets (old-pack offset dflag) dvals)))
+    (partition (join (flatten vals) spos (flatten dvals) dpos)
+	       lengths)))
+
+(defop (put-nocolision v i d) !
+	((v.alpha <- v.alpha v.int v.alpha) (alpha any))
+  (poly-typecase alpha
+    (put-scalar v i d)
+    (segput-nocolision v i d)))
+
+(defop (eput d ivpairs)
+  (with ((bindex (over (((pair b1 b2) ivpairs)) b1))
+	 (bvals (over (((pair b1 b2) ivpairs)) b2)))
+    (put-nocolision bvals bindex d)))
+
+(defop (<- d ivpairs) 
+  (with ((bindex (over (((pair b1 b2) ivpairs)) b1))
+	 (bvals (over (((pair b1 b2) ivpairs)) b2)))
+    (put bvals bindex d))
+  :shortdoc "Writes elements into d based on sequence of index value pairs."
+  :documentation
+"This operator, called write, is used to write multiple elements into a
+sequence.  Its left argument is the sequence to write into (the
+destination sequence) and its right argument is a sequence of
+integer-value pairs.  For each element {\\tt (i,v)} in the sequence of
+integer-value pairs, the value {\\tt v} is written into position {\\tt
+i} of the destination sequence."
+  :infix <-
+  :argcheck ((with ((l (length d))) 
+		(any (over (((pair i v) ivpairs)) (or (< i 0) (>= i l)))))
+	     "Index out of bounds for function <-."))
+
+(defop (write d ivpairs) (<- d ivpairs)
+  :documentation
+  "This is the same as {\tt d <- ivpairs}.")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;; CONST-PUT and COND_PUT
+;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defop (const-put v i d) !
+	((v.alpha <- alpha v.int v.alpha) (alpha any))
+  (put (dist-l v i) i d)
+  :documentation
+"Given a sequence of indices {\\tt i}, {\\tt put} places the
+constant {\\tt v} at each index in the {\\tt d} sequence. "
+  :redefine no)
+
+(defop (prim-fpermute v i flags sseg dseg)
+  ! ((alpha <- alpha int bool segdes segdes) (alpha any))
+  (base-typecase alpha
+    (int   (:primitive (FPERMUTE INT)))
+    (float (:primitive (FPERMUTE FLOAT)))
+    (char  (:primitive (FPERMUTE INT)))
+    (bool  (:primitive (FPERMUTE BOOL)))))
+
+(defop (fpermute_hack v i flags dest)
+  (with (((vector vseg vval) v)
+	 ((vector iseg ival) i)
+	 ((vector fseg fval) flags)
+	 ((vector dseg dval) dest))
+    (vector dseg (prim-fpermute vval ival fval vseg dseg))))
+
+(defop (cond_put v i flags d) !  
+	((v.alpha <- v.alpha v.int v.bool v.alpha) (alpha any))
+  (put (old-pack v flags) (old-pack i flags) d)
+  :documentation
+"Similar to the {\\tt put} function, but the extra {\\tt flags} sequence,
+which must be the same length as the indices ({\\tt i}) sequence, masks
+out positions where the flag is {\\tt f} such that nothing is placed by
+those positions."
+  :example
+  ((b0 a0 b2 a5) <-
+   (a0 a1 a2 a3 a4 a5 a6 a7)
+   (1 5 4 6 2 3 7 0)
+   (t f f f f t f f)
+   (b0 b1 b2 b3))
+  :redefine no)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;; IDENTITY FOR ALL TYPES
+;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defop (identity-scalar a) ! ((alpha <- alpha) (alpha any))
+  (base-typecase alpha
+    (int   0)
+    (float 0.0)
+    (char  #\ )
+    (bool  f)))
+
+(defop (identity a) ! ((alpha <- alpha) (alpha any))
+  (poly-typecase alpha
+    (identity-scalar a)
+    (old-pack a (over ((a a)) f)))
+  :documentation
+  "Returns the identity for any type.  The identity of a sequence is
+an empty sequence of the same type.  The identity of a number is 0,
+the identity of a boolean is f (false), and the identity of a
+character is the null character.  The identity of a pair is a pair
+of the identities of the two elements.")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;; LEN-PUT
+;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defop (len-put-scalar v i l) ! ((v.alpha <- v.alpha v.int int) (alpha any))
+  (base-typecase alpha
+    (int   (put-scalar v i (dist 0 l)))
+    (float (put-scalar v i (dist 0.0 l)))
+    (bool  (put-scalar v i (dist f l)))
+    (char  (put-scalar v i (dist #\  l)))
+    (function (with (((vector seg val) v)) (vector (make-segdes l) val))))
+  :redefine no)
+
+;; This does not work if there are collisions.
+(defop (seglenput a i l) ! ((v.v.alpha <- v.v.alpha v.int int) (alpha any))
+  (with ((lengths (put (v.length a) i (dist 0 l)))
+	 (offset (plus_scan lengths))
+	 (positions (positions-from-offsets (get_nocheck offset i) a)))
+    (partition (permute_nocheck (flatten a) positions) lengths)))
+
+(defop (len-put a i l) ! ((v.alpha <- v.alpha v.int int) (alpha any))
+  (poly-typecase alpha
+    (len-put-scalar a i l)
+    (seglenput a i l)))
+
+(defop (segput_nocolision a i l) ! ((v.v.alpha <- v.v.alpha v.int int) (alpha any))
+  (with ((lengths (put (v.length a) i (dist 0 l)))
+	 (offset (plus_scan lengths))
+	 (positions (positions-from-offsets (get_nocheck offset i) a)))
+    (partition (permute_nocheck (flatten a) positions) lengths)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;; PACK
+;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defop (old-pack-scalar v flags) ! ((v.alpha <- v.alpha v.bool) (alpha any))
+  (base-typecase alpha
+    (int   (:primitive (COPY 1 1) (POP 1 2) (PACK INT) (COPY 1 1) (POP 2 2)))
+    (float (:primitive (COPY 1 1) (POP 1 2) (PACK FLOAT) (COPY 1 1) (POP 2 2)))
+    (char  (:primitive (COPY 1 1) (POP 1 2) (PACK INT) (COPY 1 1) (POP 2 2)))
+    (bool  (:primitive (COPY 1 1) (POP 1 2) (PACK BOOL) (COPY 1 1) (POP 2 2)))
+    (function (:primitive (COPY 1 0) (COPY 1 2) (PACK BOOL) (POP 3 1)))))
+
+(defop (old-pack v flags) ! ((v.alpha <- v.alpha v.bool) (alpha any))
+  (poly-typecase alpha
+    (old-pack-scalar v flags)
+    (partition (old-pack (flatten v) (flatten (v.dist-l flags v)))
+	       (old-pack (v.length v) flags)))
+  :documentation
+  "Given a sequence of values, and an equal length boolean sequence of
+flags, {\\tt old-pack} packs all the elements with a {\\tt t} in the
+corresponding position in {\\tt flags} into consecutive elements, 
+deleting elements with an {\\tt f}."
+  :shortdoc "Pack sequence a based on boolean sequence."
+  :example
+  ((a0 a2 a5 a6 a7) <-
+   (a0 a1 a2 a3 a4 a5 a6 a7)
+   (t f t f f t t t))
+  :redefine no)
+
+(defop (pack_scalar v flags) 
+   ! ((v.alpha <- v.(pair alpha bool)) (alpha any))
+  (base-typecase alpha
+    (int   (:primitive (COPY 1 2) (PACK INT) (COPY 1 1) (POP 2 2)))
+    (float (:primitive (COPY 1 2) (PACK FLOAT) (COPY 1 1) (POP 2 2)))
+    (char  (:primitive (COPY 1 2) (PACK INT) (COPY 1 1) (POP 2 2)))
+    (bool  (:primitive (COPY 1 2) (PACK BOOL) (COPY 1 1) (POP 2 2)))
+    (function (:primitive (COPY 1 0) (COPY 1 2) (PACK BOOL) (POP 2 1)))))
+
+(defop (pack v) ! ((v.alpha <- v.(pair alpha bool)) (alpha any))
+  (poly-typecase alpha
+    (pack_scalar v)
+    (partition (pack (flatten (over (((pair val flag) v)) 
+				    (v.pair val v.flag))))
+	       (pack (over (((pair val flag) v)) 
+			   (pair (length val) flag))))
+    (with (((vector seg (pair (pair a b) flag)) v)
+	   ((vector seg1 val1) (pack (vector seg (pair a flag))))
+	   ((vector seg2 val2) (pack (vector seg (pair b flag)))))
+      (vector seg1 (pair val1 val2))))
+  :documentation
+  "Given a sequence of {\\tt (value,flag)} pairs, {\\tt pack} packs
+all the {\\tt value}s with a {\\tt t} in their corresponding {\\tt
+flag} into consecutive elements, deleting elements with an {\\tt f}."
+:shortdoc "Pack sequence a based on flags.")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;; EQL
+;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defop (eql-scalar a b) ! ((bool <- alpha alpha) (alpha any))
+  (base-typecase alpha
+    (int (= a b))
+    (float (= a b))
+    (char (= a b))
+    (bool (not (xor a b)))
+    (function t)))
+
+(defop (eql a b) ! ((bool <- alpha alpha) (alpha any))
+  (poly-typecase alpha
+    (eql-scalar a b)
+    (if (= (length a) (length b))
+	(all (v.eql a b))
+      f)
+    (with (((pair a1 a2) a)
+	   ((pair b1 b2) b))
+      (and (eql a1 b1) (eql a2 b2))))
+    :documentation
+"Given two objects of the same type, {\\tt eql} will return {\\tt t} if
+they are equal and {\\tt f} otherwise.  Two sequences are equal if they
+are the same length and their elements are elementwise equal.  Two
+records are equal if their fields are equal.")
+
+(defop (segselect flag v1 v2 seg)
+  ! ((v.alpha <- bool v.alpha v.alpha segdes) (alpha any))
+  (with ((idx (prim-iseq 0 1 seg))
+	 (i1 (pack_scalar (vector seg (pair idx flag))))
+	 (i2 (pack_scalar (vector seg (pair idx (not flag)))))
+	 (p1 (get (vector seg v1) i1))
+	 (p2 (get (vector seg v2) i2))
+	 ((vector s v) (join p1 i1 p2 i2)))
+    v))
+
+(defop (vselect flag v1 v2 seg) 
+  ! ((alpha <- bool alpha alpha segdes) (alpha any))
+  (poly-typecase alpha
+     (select-scalar flag v1 v2)
+     (segselect flag v1 v2 seg)))
+
+(defop (select flag v1 v2) ! ((alpha <- bool alpha alpha) (alpha any))
+  (poly-typecase alpha
+     (select-scalar flag v1 v2)
+     (if flag v1 v2))
+  :documentation
+  "Returns the second argument if the flag is {\\tt T} and the third 
+argument if the flag is {\\tt F}.  This differs from an {\\tt if}
+form in that both arguments are evaluated.")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; OTHER
+;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defop (enumerate flags) ! ((v.int <- v.bool))
+  (plus_scan (v.btoi flags))
+  :documentation
+"Given a boolean sequence, {\\tt enumerate} returns
+a sequence of equal length with consecutive integers,
+starting at 0, at the positions with a {\\tt t} in
+the flag."
+  :example
+  ((0 1 1 1 2 2 3 4) <-
+   (t f f t f t t f))
+  :redefine no)
+
+(defop (fseq s d e)
+   (v.+ (plus_scan (dist d (+ 1 (trunc (/ (abs (- e s)) (abs d))))))
+        v.s))
+
+(defop (count v) ! ((int <- v.bool))
+  (sum (v.btoi v))
+  :documentation
+"Counts the number of {\\tt t} flags in a boolean sequence."
+  :shortdoc "Count number of true flags in v."
+  :example
+  (5 <- (t f t t f t f t))
+  :redefine no)
+
+(defop (+-dist v) ! ((v.alpha <- v.alpha) (alpha number))
+  (dist-l (sum v) v)
+  :documentation
+"Returns the sum of a sequence to all positions of a sequence.")
+
+(defop (max-dist v) ! ((v.alpha <- v.alpha) (alpha ordinal))
+  (dist-l (max_val v) v)
+  :documentation
+"Returns the maximum element to all positions of a sequence.")
+
+(defop (min-dist v) ! ((v.alpha <- v.alpha) (alpha ordinal))
+  (dist-l (min_val v) v)
+  :documentation
+"Returns the minimum element to all positions of a sequence.")
+
+(defop (max_index v) ! ((int <- v.alpha) (alpha ordinal))
+  (with ((l (length v)))
+    (min_val (v.select (v.= (max-dist v) v) (index-l v) (dist-l l v))))
+  :documentation
+"Given a sequence of ordinals, {\\tt max_index}
+returns the index of the maximum value.  If several values
+are equal, it returns the leftmost index."
+  :shortdoc "Return index of the maximum value."
+  :example
+  (4 <- (2 11 4 7 14 6 9 14))
+  :redefine no)
+
+(defop (min_index v) ! ((int <- v.alpha) (alpha ordinal))
+  (with ((l (length v)))
+    (min_val (v.select (v.= (min-dist v) v) (index-l v) (dist-l l v))))
+  :documentation
+"Given a sequence of ordinals, {\\tt min_index}
+returns the index of the minimum value.  If several values
+are equal, it returns the leftmost index."
+  :shortdoc "Return index of the minimum value."
+  :redefine no)
+
+(defop (rotate a i) ! ((v.alpha <- v.alpha int) (alpha any))
+  (with ((l   (length a))
+	 (idx (iseq-l i 1 a)))
+     (permute_nocheck a (over ((idx idx)) (mod idx l))))
+  :documentation
+  "Given a sequence and an integer, {\\tt rotate} rotates the sequence
+around by {\\tt i} positions to the right.  If the integer is negative, then
+the sequence is rotated to the left."
+  :shortdoc "Rotate sequence a by i positions."
+  :example
+  ((a5 a6 a7 a0 a1 a2 a3 a4) <-
+   (a0 a1 a2 a3 a4 a5 a6 a7) 3)
+  :redefine no)
+
+(defop (previous a v) ! ((v.alpha <- v.alpha alpha) (alpha any))
+  (rep (rotate a 1) v 0))
+
+(defop (next a v) ! ((v.alpha <- v.alpha alpha) (alpha any))
+  (rep (rotate a -1) v (- (length a) 1)))
+
+(defop (pack-index flags) ! ((v.int <- v.bool))
+  (old-pack (index-l flags) flags)
+  :documentation
+  "Given a boolean sequence of
+flags, {\\tt pack-index} returns a sequence containing the indices of
+each of the true flags."
+  :shortdoc "Packed indices of true positions in sequence."
+  :example
+  ((0 2 5 6 7) <-
+   (t f t f f t t t))
+  :redefine no)
+
+(defop (unpack v flags) ! ((v.alpha <- v.alpha v.bool) (alpha any))
+  (len-put v (pack-index flags) (length flags))
+  :documentation
+"Given a sequence of values, and longer or equal length sequence of flags, 
+which has as many T's as values in {\\tt V}, {\\tt unpack} unpacks the 
+elements into positions of the flags with a {\\tt t}."
+  :example
+  ((a0 0 a1 0 0 a2 a3 a4) <-
+   (a0 a1 a2 a3 a4)
+   (t f t f f t t t))
+  :redefine no)
+
+(defop (reverse a) ! ((v.alpha <- v.alpha) (alpha any))
+  (permute_nocheck a (iseq-l (- (length a) 1) -1 a))
+  :documentation
+  "Reverses the order of the elements in a sequence.")
+
+(defop (segjoin v1 p1 v2 p2)  !
+  ((v.v.alpha <- v.v.alpha v.int v.v.alpha v.int) (alpha any))
+  (with ((l1 (v.length v1))
+	 (l2 (v.length v2))
+	 (ll (join l1 p1 l2 p2))
+	 (offsets (plus_scan ll))
+	 (pos1 (positions-from-offsets (get_nocheck offsets p1) v1))
+	 (pos2 (positions-from-offsets (get_nocheck offsets p2) v2)))
+    (partition (join (flatten v1) pos1 (flatten v2) pos2) ll)))
+
+(defop (join v1 p1 v2 p2) ! 
+  ((v.alpha <- v.alpha v.int v.alpha v.int) (alpha any))
+  (poly-typecase alpha
+    (put-scalar v1 p1 (len-put-scalar v2 p2 (+ (length v1) (length v2))))
+    (segjoin v1 p1 v2 p2))
+  :documentation
+"Given two sequences of pointers and two sequences of values,
+{\\tt join} merges the values into the positions specified
+by the pointers.  {\\tt V1} and {\\tt P1} must be of the same
+length, and {\\tt V2} and {\\tt P2} must be of the same length."
+  :example
+  ((b0 a0 b1 b2 a1 a2 b3 b4) <-
+   (a0 a1 a2) (1 4 5)
+   (b0 b1 b2 b3 b4) (0 2 3 6 7))
+  :redefine no)
+
+(defop (++ v1 v2) ! ((v.alpha <- v.alpha v.alpha) (alpha any))
+  (join v1 (iseq-l 0 1 v1) v2 (iseq-l (length v1) 1 v2))
+  :documentation
+  "Given two sequences, {\\tt ++} appends them."
+  :shortdoc "Append sequences v1 and v2."
+  :example
+  ((a0 a1 a2 b0 b1) <-
+   (a0 a1 a2) (b0 b1))
+  :infix ++)
+
+(defop (cons a v) !  ((v.alpha <- alpha v.alpha) (alpha any))
+  (++ (dist a 1) v)
+  :documentation
+  "Given a value {\\tt a} and a sequence of values {\\tt v}, {\\tt cons}
+concatenates the value onto the front of the sequence."
+  :shortdoc "Append element a to front of sequence v."
+  :example
+  ((a0 b0 b1 b2 b3) <-
+   a0 (b0 b1 b2 b3)))
+
+(defop (snoc v a) ! ((v.alpha <- v.alpha alpha) (alpha any))
+  (++ v (dist a 1))
+  :documentation
+  "Given a sequence of values {\\tt v} and  a value {\\tt a}, {\\tt snoc}
+concatenates {\\tt a} to the end of the sequence."
+  :example
+  ((b0 b1 b2 b3 a0) <-
+   (b0 b1 b2 b3) a0))
+
+(defop (make_sequence v a) (++ v (dist a 1)))
+
+(defop (vpair a b) ! ((v.alpha <- alpha alpha) (alpha any))
+  (poly-typecase alpha
+    (rep (dist b 2) a 0)
+    (partition (++ a b) (vpair (length a) (length b))))
+  :documentation
+  "Given two values of the same type, {\\tt vpair} puts them together
+into a sequence of length 2."
+  :shortdoc "Append elements a and b into a sequence."
+  :example
+  ((a0 a1) <-
+   a0 a1))
+
+(defop (vsep a) ! (((pair alpha alpha) <- v.alpha) (alpha any))
+  (pair (elt_nocheck a 0) (elt_nocheck a 1))
+  :documentation
+  "Given a sequence of length 2, {\\tt vsep} returns a tuple
+with the first sequence element in the first position and
+the second sequence element in the second position."
+  :shortdoc "Convert two-element sequence a into a pair.")
+
+(defop (subseq v start end) ! ((v.alpha <- v.alpha int int) (alpha any))
+  (get_nocheck v (iseq1 start end))
+  :documentation
+"Given a sequence, {\\tt subseq} returns the subsequence starting at
+position {\\tt start} and ending one before position {\\tt end}."
+  :shortdoc "Subsequence of a from indices start to end."
+  :example
+  ((a2 a3 a4 a5) <-
+   (a0 a1 a2 a3 a4 a5 a6 a7) 2 6)
+  :redefine no
+  :argcheck ((or (< start 0) (or (> start end) (> end (length v))))
+	     "Bounds error for function SUBSEQ."))
+
+(defop (drop v n) ! ((v.alpha <- v.alpha int) (alpha any))
+  (if (>= n 0)
+      (subseq v n (length v))
+    (subseq v 0 (+ (length v) n)))
+  :documentation
+  "Given a sequence, {\\tt drop} drops the first {\\tt n} items
+from the sequence."
+  :shortdoc "Drop first n elements of sequence v."
+  :example
+  ((a3 a4 a5 a6 a7) <-
+   (a0 a1 a2 a3 a4 a5 a6 a7) 3)
+  :redefine no
+  :argcheck ((> (abs n) (length v))
+	     "Bounds error for function DROP."))
+
+(defop (take v n) ! ((v.alpha <- v.alpha int) (alpha any))
+  (if (>= n 0) (subseq v 0 n) 
+    (with ((len (length v)))
+      (subseq v (+ len n) len)))
+  :documentation
+"Given a sequence, {\\tt take} takes the first {\\tt n} items
+from the sequence."
+  :shortdoc "Take first n elements of sequence v."
+  :example
+  ((a0 a1 a2) <-
+   (a0 a1 a2 a3 a4 a5 a6 a7) 3)
+  :redefine no
+  :argcheck ((> (abs n) (length v))
+	     "Bounds error for function TAKE."))
+
+(defop (flag-merge flags v1 v2) ! 
+	((v.alpha <- v.bool v.alpha v.alpha) (alpha any))
+  (with ((i (index-l flags)))
+    (join v2 (old-pack i flags)
+          v1 (old-pack i (v.not flags))))
+  :documentation
+"Given two sequences of values and a boolean sequence of flags,
+{\\tt flag-merge} merges the values according to the flags.
+Positions with a T in their flag will get values from the second sequence,
+and positions with a {\\tt f} in their flag will get values from the 
+first sequence.  The ordering is maintained."
+  :example
+  ((b0 a0 b1 a1 a2 b2 b3 b4) <-
+   (a0 a1 a2) (b0 b1 b2 b3 b4)
+   (t f t f f t t t))
+  :redefine no)
+
+(defop (cond-indices flags)
+  (with ((i (index-l flags)))
+    (pair (old-pack i flags) (old-pack i (v.not flags)))))
+
+(defop (flag_merge flags v1 v2)
+  (with ((i (index (length flags))))
+    (join v2 (old-pack i flags)
+          v1 (old-pack i (v.not flags)))))
+
+(defop (odd_elts v) ! ((v.alpha <- v.alpha) (alpha any))
+  (get_nocheck v (iseq 1 2 (length v)))
+  :documentation
+"Returns the odd indexed elements of a sequence.")
+
+(defop (even_elts v) ! ((v.alpha <- v.alpha) (alpha any))
+  (get_nocheck v (iseq 0 2 (length v)))
+  :documentation
+"Returns the even indexed elements of a sequence.")
+
+(defop (interleave a b) ! ((v.alpha <- v.alpha v.alpha) (alpha any))
+  (flag-merge (v.oddp (index (+ (length a) (length b)))) a b)
+  :documentation
+"Interleaves the elements of two sequences.  The sequences must
+be of the same length."
+  :example
+  ((a0 b0 a1 b1 a2 b2 a3 b3) <-
+   (a0 a1 a2 a3) (b0 b1 b2 b3))
+  :argcheck ((> (abs (- (length a) (length b))) 1)
+	     "Length mismatch for function INTERLEAVE."))
+
+(defop (hash_float a)
+  (if (= a 0.0) 0
+    (with ((a (abs a))
+	   (lg (trunc (log a 2.0)))
+	   (sig (trunc (/ a (expt 2.0 (float (- lg 30)))))))
+      (- sig lg)))) 
+
+(defop (hash_scalar a) ! ((int <- alpha) (alpha any))
+  (base-typecase alpha
+    (int a)
+    (bool (btoi a))
+    (char (char_code a))
+    (float (hash_float a)))) 
+
+(defop (hash_vector a) 
+  (sum (over ((v a)
+	      (i (index-l a)))
+	 (* (hashinternal v) (^ 572197 i)))))
+
+(defop (cheap_hash_vector a) 
+  (sum (over ((v a)
+	      (i (index-l a)))
+	     (with ((j  (+ i 991892313)))
+	       (* (hashinternal v) (* j (* j j)))))))
+
+(defop (hashinternal a) ! ((int <- alpha) (alpha any))
+  (poly-typecase alpha
+    (hash_scalar a)
+    (cheap_hash_vector a)
+    (with (((pair a1 a2) a))
+      (+ (hashinternal a1) (* 991892311 (hashinternal a2))))))
+
+;; The following two variables have machine specific values and get set
+;; when the user sets the configuration.  They are derived by running
+;; min_val([] int) and max_val([] int) respectively.
+(set max_int 0
+     :documentation "The maximum value of an integer."
+     :redefine on)
+
+(set min_int 0
+     :documentation "The minimum value of an integer."
+     :redefine on)
+
+;; Returns a hash of the value in the range [0..range)
+;; It currently has a very naive implementation....but
+;; it serves its purpose.
+(defop (hash a l) (rem (and max_int (hashinternal a)) l)
+  :documentation
+  "Hashes the argument {\\tt a} and returns an integer in the range
+{\\tt [0..l)}.  This will always generate the same result for equal
+values as long as it is run on the same machine.  In particular
+floating-point hashing can depend on the floating-point
+representation, which is machine dependent.    There is no guarantee
+about the distribution of the results---returning 0 for all keys
+would be a valid implementation, although we expect an implementation
+to do much better than that."
+  :argcheck ((< l 1) 
+	     "The second argument for the function HASH must be positive."))
+
+(defop (zip a b) 
+  (over ((a a) (b b)) (pair a b))
+  :documentation
+  "Zips two sequences of equal length together into a single sequence
+of pairs."
+  :argcheck ((/= (length a) (length b))
+	     "Length mismatch in function ZIP."))
+
+(defop (zip3 a b c) 
+  (over ((a a) (b b) (c c)) (pair a (pair b c)))
+  "Zips three sequences of equal length together into a single sequence
+of triples.")
+
+(defop (unzip a) 
+  (pair (over (((pair a1 a2) a)) a1) (over (((pair a1 a2) a)) a2))
+  :documentation
+  "Unzips a sequence of pairs into a pair of sequences.")
+
+(defop (zip-over a b)
+  (with (((vector sega vala) a)
+	 ((vector segb valb) b)	)
+    (vector sega (pair vala valb)))
+  :argcheck ((/= (length a) (length b))
+	     "Length mismatch in an apply-to-each."))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;; RANK
+;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defop (prim-rank_up v seg) ! ((int <- alpha segdes) (alpha number))
+  (base-typecase alpha
+    (int   (:primitive (RANK_UP INT)))
+    (float (:primitive (RANK_UP FLOAT)))))
+
+(defop (prim-rank_down v seg) ! ((int <- alpha segdes) (alpha number))
+  (base-typecase alpha
+    (int   (:primitive (RANK_DOWN INT)))
+    (float (:primitive (RANK_DOWN FLOAT)))))

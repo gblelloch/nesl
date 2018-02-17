@@ -1,0 +1,80 @@
+NESL RELEASE 3.0 
+
+BASIC INFORMATION:
+
+NESL is a fine-grained, functional, nested data-parallel language.
+The current implementation runs on workstations, the Connection
+Machines CM2 and CM5, and the Cray Y-MP (8, C90 and EL).  NESL code is
+fully portable across these machines, and for many applications it
+achieves performance comparable to machine specific code.  The
+implementation is based on an intermediate language called VCODE and a
+low-level vector library called CVL.
+
+HOW TO GET THE DISTRIBUTION:
+
+The full NESL distribution can be obtained via anonymous FTP from:
+
+   nesl.scandal.cs.cmu.edu:code/nesl/nesl.tar.Z
+        (If you have AFS, the release can also be obtained from:
+         /afs/cs.cmu.edu/project/scandal/public/code/nesl/nesl.tar.Z)
+
+Once copied over to your machine, it can be unpacked by running:
+
+  uncompress -c nesl.tar.Z | tar -xf -
+
+This will create a directory called nesl in your current directory
+with the full distribution within that directory.  Building an
+executable version of NESL is straightforward.
+
+REQUIREMENTS:
+
+To run NESL you will need either Allegro, CMU, Kyoto or Lucid Common
+Lisp.  CMU and Kyoto are available as free software: send mail to
+wfs@math.utexas.edu for information on AKCL, or slisp@cs.cmu.edu for
+information on CMU-CL.
+
+You will also need an ANSI C compiler, a unix-like operating system
+(Mach, unicos... work fine), and if you want the graphics routines,
+you will need an X11 library.
+
+DISTRIBUTION CONTENTS:
+
+The current nesl distribution file (nesl.tar.Z) is approximately 1.3
+Megabytes (compressed), and includes the following:
+
+  BUILD         Directions on how to build NESL
+  Makefile      Used for building the release
+  README        This file
+  cvl/
+     cm2/       Source code for the Connection Machine CM-2 version of CVL
+     cm5/       Source code for the Connection Machine CM-5 version of CVL 
+     cray/      Source code for the CRAY Y-MP version of CVL
+     serial/    Source code for the serial version of CVL
+  doc/
+     cvl.ps     The CVL manual
+     manual.ps  The NESL manual
+     user.ps    The NESL user's guide
+     vcode.ps   The VCODE manual
+  emacs/        NESL editing mode for GNU Emacs
+  examples/     Collection of NESL examples
+  neslsrc/      Source code for NESL
+  release.notes List of changes since the last release
+  utils/        Source code for plotting routines
+  vcode/        Source code for the VCODE interpreter
+
+The directory 
+    nesl.scandal.cs.cmu.edu:code/nesl/nesl
+contains the contents of the tar file if you are only interested in 
+part of the distribution.
+
+MAILING LIST:
+
+You can be placed on the nesl mailing list by sending a request
+to nesl-request@cs.cmu.edu.
+
+BUGS:
+
+You can send bug reports to nesl-bugs@cs.cmu.edu.  It should be noted
+that NESL is a research tool rather than a production system.  We will
+try to respond to your bugs as quickly as possible, but make no
+guarantees.

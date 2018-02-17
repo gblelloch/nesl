@@ -1,0 +1,177 @@
+
+function insert(val, vect) =
+  let 
+    len = length(vect); 
+    idx = min(len, min-reduce({select(v < val, len, i): 
+                               v in vect; i in index(len)}))
+  in 
+    append(subseq(vect, 0, idx), 
+           cons(val, subseq(vect, idx, len))); $
+
+function insertion-sort(a, b) =
+  if (length(a) == 0)
+  then b
+  else 
+    let (head, rest) = head-rest(a)
+    in insertion-sort(rest, insert(head, b)); $
+
+function extract-min(a) =
+  let 
+    idx = min-index(a); 
+    rest = append(subseq(a, 0, idx), subseq(a, idx + 1, length(a)))
+  in elt(a, idx), rest; $
+
+function selection-sort(a) =
+  if (length(a) <= 1)
+  then a
+  else 
+    let (min, rest) = extract-min(a)
+    in cons(min, selection-sort(rest)); $
+
+function bitonic-sort(a) =
+  if (length(a) == 1)
+  then a
+  else 
+    let 
+      len = length(a); 
+      bot = subseq(a, 0, len / 2); 
+      top = subseq(a, len / 2, len)
+    in 
+      flatten({bitonic-sort(x171): 
+               x171 in vpair({min(bot, top): bot; top}, 
+                             {max(bot, top): bot; top})}); $
+
+function batcher-sort(a) =
+  if (length(a) == 1)
+  then a
+  else 
+    let foo = {batcher-sort(x172): x172 in bottop(a)}
+    in bitonic-sort(append(elt(foo, 0), reverse(elt(foo, 1)))); $
+
+function odd-even-merge(a, b) =
+  if (length(a) > 1)
+  then 
+    let 
+      len = length(a); 
+      (r1, r2) = vsep({odd-even-merge(x174, x173): 
+                       x174 in vpair(odd-elts(a), even-elts(a)); 
+                       x173 in vpair(even-elts(b), odd-elts(b))})
+    in interleave({min(r1, r2): r1; r2}, {max(r1, r2): r1; r2})
+  else 
+    if (elt(a, 0) < elt(b, 0))
+    then append(a, b)
+    else append(b, a); $
+
+function odd-even-merge-sort(a) =
+  if (length(a) == 1)
+  then a
+  else 
+    let foo = {odd-even-merge-sort(x175): x175 in bottop(a)}
+    in odd-even-merge(elt(foo, 0), elt(foo, 1)); $
+
+function fix-near-merge(nm) =
+  {min(x177, x176): 
+   x177 in reverse(min-scan(reverse(nm))); 
+   x176 in {max(x178, nm): x178 in max-scan(nm); nm}}; $
+
+function halving-merge(a, b) =
+  if (length(a) > 1)
+  then 
+    let 
+      me = halving-merge(even-elts(a), even-elts(b)); 
+      oe = flag-merge({oddp(me): me}, odd-elts(a), odd-elts(b))
+    in fix-near-merge(interleave(me, oe))
+  else 
+    if (elt(a, 0) < elt(b, 0))
+    then append(a, b)
+    else append(b, a); $
+
+function app-bit(v, b) =
+  lshift(v, 1) or b; $
+
+function pmerge(a, b) =
+  {rshift(x179, 1): 
+   x179 in halving-merge({app-bit(a, 0): a}, {app-bit(b, 1): b})}; $
+
+function merge-sort(a) =
+  if (length(a) == 1)
+  then a
+  else 
+    let foo = {batcher-sort(x180): x180 in bottop(a)}
+    in pmerge(elt(foo, 0), elt(foo, 1)); $
+
+function qsort(a) =
+  if (length(a) < 2)
+  then a
+  else 
+    let 
+      pivot = elt(a, length(a) / 2); 
+      lesser = pack(a, {a < pivot: a}); 
+      equal = pack(a, {a == pivot: a}); 
+      greater = pack(a, {a > pivot: a}); 
+      results = {qsort(x181): x181 in vpair(lesser, greater)}
+    in append(elt(results, 0), append(equal, elt(results, 1))); $
+
+function count-buckets(values, buckets, i) =
+  if (i == length(values))
+  then buckets
+  else 
+    let 
+      key = elt(values, i); 
+      count = elt(buckets, key); 
+      newbuckets = rep(buckets, count + 1, key)
+    in count-buckets(values, newbuckets, i + 1); $
+
+function new-location(values, offsets, i) =
+  if (i == length(values))
+  then values
+  else 
+    let 
+      key = elt(values, i); 
+      count = elt(offsets, key); 
+      newvalues = rep(values, count, i); 
+      newoffsets = rep(offsets, count + 1, key)
+    in new-location(newvalues, newoffsets, i + 1); $
+
+function serial-counting-rank(a, bucketsize) =
+  let 
+    buckets = dist(0, bucketsize); 
+    counts = count-buckets(a, buckets, 0); 
+    offsets = +-scan(counts)
+  in new-location(a, offsets, 0); $
+
+function transpose(a, n, bl) =
+  permute(a, dist-index(n, bl)); $
+
+function fix-buckets(buckets, copies, bucketsize) =
+  let 
+    transposed-buckets = transpose(flatten(buckets), copies, bucketsize); 
+    scanned-buckets = +-scan(transposed-buckets); 
+    offsets = transpose(scanned-buckets, bucketsize, copies)
+  in partition(offsets, dist(bucketsize, copies)); $
+
+function parallel-counting-rank(a, bucketsize) =
+  let 
+    sqrt = isqrt(length(a)); 
+    subvals = partition(a, dist(sqrt, sqrt)); 
+    counts = {count-buckets(subvals, dist(0, bucketsize), 0): 
+              subvals}; 
+    offsets = fix-buckets(counts, sqrt, bucketsize)
+  in 
+    flatten({new-location(subvals, offsets, 0): 
+             subvals; offsets}); $
+
+function p-radix-rank-r(v, i, count) =
+  if (count == 0)
+  then permute(index(length(i)), i)
+  else 
+    let 
+      subkeys = {v and 255: v}; 
+      newkeys = {rshift(v, 8): v}; 
+      index = parallel-counting-rank(subkeys, 256)
+    in 
+      p-radix-rank-r(permute(newkeys, index), 
+                     permute(i, index), count - 1); $
+
+function p-radix-rank(v) =
+  p-radix-rank-r(v, index(length(v)), 4); $

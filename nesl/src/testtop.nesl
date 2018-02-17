@@ -1,0 +1,218 @@
+%
+This file tests the toplevel commands of nesl.
+%
+
+print_line("
+
+VERBOSE TESTS");
+
+set verbose on;
+
+print_line("Verbose on");
+
+set verbose off;
+
+print_line("
+
+Verbose off");
+
+
+print_line("
+
+LOAD TESTS");
+
+loadfile = nesl_path ++ "src/testload";
+
+print_line("
+Load with verbose and no print (default)");
+
+load(loadfile);
+
+print_line("
+Load with verbose and print");
+
+load(loadfile, print := t);
+
+print_line("
+Load with no verbose and print");
+
+load(loadfile, verbose := f, print := t);
+
+print_line("
+Load with no verbose and no print");
+
+load(loadfile, verbose := f);
+
+
+print_line("
+
+DESCRIBE TESTS");
+
+print_line("
+Describe +.");
+describe +;
+
+print_line("
+Describe nesl_path (a variable).");
+describe nesl_path;
+
+print_line("
+Describe wombat_foo (a nonexisting function).");
+describe wombat_foo;
+
+
+print_line("
+
+SHOW CODE TESTS");
+
+print_line("
+Show code intersection.");
+show code intersection;
+
+print_line("
+Show code + (primitive).");
+show code +;
+
+print_line("
+Show code nesl_path (variable).");
+show code nesl_path;
+
+print_line("
+The following two should give errors.");
+
+show code wombat_foo_bar;
+
+show code;
+
+
+print_line("
+
+ARGCHECK TESTS");
+
+set arg_check on;
+
+print_line("
+The Following two should give a NESL runtime error.");
+
+[2,3][2];
+
+{a + b: a in [2]; b in [3,4]};
+
+set arg_check off;
+
+print_line("
+The Following two should give no error or a VCODE runtime error.");
+
+[2,3][2];
+
+{a + b: a in [2]; b in [3,4]};
+
+set arg_check on;
+
+
+print_line("
+
+TRACE TESTS");
+
+function foo(a,b) =
+let 
+    c = a + b;
+    (d,e) = (c,a-b);
+in c + d + e;
+
+set trace foo 1;
+
+print_line("
+Trace Level 1");
+
+foo(1,2);
+
+set trace foo 2;
+
+print_line("
+Trace Level 2");
+
+foo(1,2);
+
+set trace foo 3;
+
+print_line("
+Trace Level 3");
+
+foo(1,2);
+
+set trace foo 4;
+
+print_line("
+Trace Level 4");
+
+foo(1,2);
+
+set trace foo 0;
+
+print_line("
+Trace Off");
+
+foo(1,2);
+
+
+print_line("
+
+PROFILE TEST");
+
+set profile foo on;
+print_line("
+Set profile foo on");
+
+foo(1,2);
+
+set profile foo off;
+print_line("
+Set profile foo off");
+
+foo(1,2);
+
+%
+print_line("
+
+PRINT LENGTH TEST");
+
+set print_length 0;
+"Length = 0";
+dist(1,100);
+
+set print_length 10;
+"Length = 10";
+dist(1,100);
+
+set print_length 100;
+"Length = 100";
+dist(1,100);
+%
+
+print_line("
+
+TEST SHOW STATUS");
+
+show status;
+
+print_line("
+
+TEST FILE VARIABLES");
+
+print_line("
+Assigning to file variable a.");
+a |= dist(1,500000);
+
+print_line("
+Length of file variable a = "++ @(#a));
+
+print_line("
+Assigning to file variable b and c.");
+b,c |= dist(1,500000),"foo";
+
+print_line("
+Value of c = " ++ c);
+
+print_line("
+Length of file variable a (again) = "++ @(#a));

@@ -1,0 +1,244 @@
+%
+This example finds the convex hull in 2 dimensions for a set of points.
+The algorithm is described in the NESL language definition.
+This file also includes a function, hull_demo(n), that picks approximately
+n random points in a circle, plots the points, finds the hull, and plots
+the hull.
+
+All routines return the hull in clockwise order from the point with
+minimum x value.
+%
+
+
+epsilon = 1e-10;
+
+function m_cross_product(points,line) =
+let
+    ((i1,x1,y1),(i2,x2,y2)) = line;
+    deter = x1*y2 - x2*y1;
+    a = y1 - y2;
+    b = x2 - x1;
+in deter,{a*x + b*y : (i,x,y) in points} $
+
+function hsplit2(points,p1,p2) =
+let 
+    deter,cross = m_cross_product(points,(p1,p2));
+    threshold = -deter + abs(deter)*epsilon;
+    packed = {p in points; c in cross | c > threshold};
+in if (#packed < 2) then [first(p1)] ++ {i: i,x,y in packed}
+   else
+     let pm = points[max_index(cross)];
+     in flatten({hsplit2(packed,p1,p2): p1 in [p1,pm]; p2 in [pm,p2]}) $
+
+% This can break if MINY is the same point as MINX or MAXX. %
+function lower_hull(points) =
+let 
+    is,pts = unzip(points);
+    xs,ys = unzip(pts);
+    minx = points[min_index(xs)];
+    maxx = points[max_index(xs)];
+    miny = points[min_index(ys)];
+    (i1,x1,y1) = miny;
+    pts = split(points,{x < x1 : (i,x,y) in points});
+in hsplit2(pts[0],maxx,miny) ++ hsplit2(pts[1],miny,minx) ++ [first(minx)] $
+
+function convex_hull(points) =
+let x = {x : (i,x,y) in points};
+    minx = points[min_index(x)];
+    maxx = points[max_index(x)];
+in hsplit2(points,minx,maxx) ++ hsplit2(points,maxx,minx) $
+
+% DOES NOT WORK IF ANY OF XMIN, XMAX, YMIN, or YMAX ARE THE SAME %
+function convex_hull_fast(points) =
+let xpts = {x : (i,x,y) in points};
+    ypts = {y : (i,x,y) in points};
+    xmin = points[min_index(xpts)];
+    xmax = points[max_index(xpts)];
+    ymin = points[min_index(ypts)];
+    ymax = points[max_index(ypts)];
+    (_,topx,__) = ymax;
+    (_,botx,__) = ymin;
+    (_,__,lefty) = xmin;
+    (_,__,righty) = xmax;
+    l_up = {(i,x,y) in points | x < topx and y > lefty};
+    r_up = {(i,x,y) in points | x > topx and y > righty};
+    l_down = {(i,x,y) in points | x < botx and y < lefty};
+    r_down = {(i,x,y) in points | x > botx and y < righty};
+    hull = hsplit2(l_up,xmin,ymax) ++ hsplit2(r_up,ymax,xmax) ++ 
+           hsplit2(r_down,xmax,ymin) ++ hsplit2(l_down,ymin,xmin)
+in {h in hull ; nh in rotate(hull,1) | h /= nh} $
+
+
+
+FUNCTION perp_line_from_point(x0,y0) =
+let sq = x0^2+y0^2 
+in x0/sq,y0/sq $
+
+FUNCTION delaunay_neighbors((i,(x0,y0)),pts) =
+let
+    % Generate half planes from points %
+    npts = {j,perp_line_from_point(x-x0,y-y0) : j,(x,y) in pts};
+
+    % Use convex hull to find intersection %
+    hull = convex_hull([(i,(0.,0.))]++npts);
+
+% remove self from the hull, if it is in there %
+in {i,j: j in hull | j /= i} $
+
+% SIMILAR, BUT RETURNS A LARGE NUMBER IF THE TWO POINTS ARE THE SAME%
+function distancex((i,x1,y1),(j,x2,y2)) = 
+let d = sqrt(
+in if zerop(d) then 1e100 else d $
+
+% THIS IS AN N^2 ALGORITHM FOR FINDING THE N CLOSEST PAIRS %
+function stupid_closest_pairs(a,n) =
+ {take(permute(a,rank()),n) : pt1 in a} $
+
+function almost_median(a) = median(a->{rand(i) : i in dist(#a,isqrt(#a))})$
+
+function approximate_delaunay_neighbors((i1,x1,y1),pts) =
+if #pts < 30 then delaunay_neighbors((i1,x1,y1),pts)
+else let
+    distance = {(x2-x1)^2 + (y2-y1)^2 : (i,x2,y2) in pts};
+    threshold = kth_smallest(distance,min(25,#pts));
+    % threshold = 5.*min_val(distance);%
+in delaunay_neighbors((i1,x1,y1),{p in pts; d in distance | d < threshold}) $
+
+FUNCTION nested_get(a,i) =
+  let lens = {#i:i};
+      vals = a->flatten(i)
+  in partition(vals,lens) $
+
+
+% Given a set of points and a set of edges (pairs of indices to the points),
+  this returns for each point its delaunay edges sorted clockwise.
+  It assumes that all Delaunay edges are included in the input edgelist 
+  but that they don't have to appear in both directions %
+FUNCTION delaunay_from_edgelist(points,edges) =
+let
+    % orient the edges and remove duplicates %
+    edges = remove_duplicates({max(i,j),min(i,j): (i,j) in edges});
+
+    % put in the back edges %
+    edges = edges ++ {j,i : (i,j) in edges};
+
+    % create an adjacency list for each node %
+    adj_lists = {e : i,e in int_collect(edges)};
+
+    % tag the points with indices %
+    pts = zip([0:#points],points);
+
+    % for each point subselect the delaunay edges and sort clockwise %
+    adj_lists = {delaunay_neighbors(pt,npts): 
+		 pt in pts; npts in nested_get(pts,adj_lists)};
+in adj_lists $
+
+function mdn(pts) =
+if #pts == 0 then [] (int,int)
+else
+    let rest = drop(pts,1);
+    in delaunay_neighbors(pts[0],rest) ++ mdn(rest) $
+
+function testtime(points,previous_n) =
+if (#points <= 64) or #points == previous_n 
+then mdn(points)
+else let
+    n = #points;
+    points = {i,y,x : i,x,y in points};
+    med = median({x : i,x,y in points});
+    (i,xm,ym) = {i,x,y in points | x == med}[0];
+    proj = {j,y,(x-xm)^2+(y-ym)^2: i,x,y in points; j in index(n)};
+    foo = lower_hull(proj);
+    bar = {i : i,x,y in points}->foo;
+    edges = zip(drop(bar,1),drop(bar,-1));
+    hull_flags = dist(f,n)<-{i,t: i in foo};
+    down_points = {i,x,y in points; fl in hull_flags | x < med or fl};
+    up_points = {i,x,y in points; fl in hull_flags | x >= med or fl};
+in 
+    if #points > 1000000
+    then edges ++testtime(down_points,n)++testtime(up_points,n)
+    else edges ++ flatten({testtime(x,n) : x in [down_points,up_points]}) $
+
+function random_points_in_a_square(n) =
+    {rand(j),rand(j) : j in dist(1.0,n)} $
+
+function testall(n) =
+let
+    pts = random_points_in_a_square(n);
+    ipts = {i,p : i in index(#pts) ; p in pts};
+    edges1,tm1 = time(testtime(ipts,n+1));
+    edges2,tm2 = time(flatten(delaunay_from_edgelist(pts,edges1)));
+in #edges1,#edges2,tm1,tm2 $
+
+function testall_draw(n) =
+let 
+    pts = random_points_in_a_square(n);
+    ipts = {i,p : i in index(#pts) ; p in pts};
+    edges,tm = time(testtime(ipts,#ipts+1));
+    window = w_make_window(((200,100),(600,600)),  % Window position and size %
+			   "delaunay graph",      % Window title %
+			   w_black,                % Background color %
+			   display);               % Default display %
+    bound_box = w_bounding_box(pts);
+    window,box = w_add_box(((50,50),(500,500)),% offset,size within window %
+			   bound_box,          % offset,size of virtual coords%
+			   "graph box",        % box title %
+			   w_white,            % box color %
+			   window);            % window %
+    edges,tm2 = time(flatten(delaunay_from_edgelist(pts,edges)));
+    e1,e2 = unzip(edges);
+    lines = zip(pts->e1,pts->e2);
+    _ = w_draw_segments(lines,1,w_red,box);
+    %_ = w_draw_big_points(pts,3,w_blue,box);%
+    _ = w_add_text((250,20),"Click on window to remove",w_white,window);
+    _ = w_get_input(window);  % wait for an event %
+    _ = w_kill_window(window);
+in #edges,tm,tm2 $
+
+function testall_draw(n) =
+let 
+    pts = random_points_in_a_square(n);
+    ipts = {i,p : i in index(#pts) ; p in pts};
+    edges,tm = time(testtime(ipts,#ipts+1));
+    window = w_make_window(((200,100),(600,600)),  % Window position and size %
+			   "delaunay graph",      % Window title %
+			   w_black,                % Background color %
+			   display);               % Default display %
+    bound_box = w_bounding_box(pts);
+    window,box = w_add_box(((50,50),(500,500)),% offset,size within window %
+			   bound_box,          % offset,size of virtual coords%
+			   "graph box",        % box title %
+			   w_white,            % box color %
+			   window);            % window %
+    edges,tm2 = time(flatten(delaunay_from_edgelist(pts,edges)));
+    e1,e2 = unzip(edges);
+    lines = zip(pts->e1,pts->e2);
+    _ = w_draw_segments(lines,1,w_red,box);
+    %_ = w_draw_big_points(pts,3,w_blue,box);%
+    _ = w_add_text((250,20),"Click on window to remove",w_white,window);
+    _ = w_get_input(window);  % wait for an event %
+    _ = w_kill_window(window);
+in #edges,tm,tm2 $
+
+function hull_demo(n) =
+let 
+    pts = random_points_in_a_square(n);
+    ipts = {i,p : i in index(#pts) ; p in pts};
+    ignore = if (#pts < 2) then print_string("Not enough points.") else f;
+    box =    bounding_box([(-1.0,-1.0),(1.0,1.0)]);
+    window = w_make_window(((200,100),(600,600)),  % Window position and size %
+			   "convex hull",          % Window title %
+			   w_black,                % Background color %
+			   display);               % Default display %
+    window,box = w_add_box(((50,50),(500,500)),% offset,size within window %
+			   ((-1.,-1.),(2.,2.)),% offset,size of virtual coords%
+			   "hull box",         % box title %
+			   w_white,            % box color %
+			   window);            % window %
+    ignore = w_draw_big_points(pts,3,w_black,box);
+    hull =   pts->convex_hull_fast(ipts);
+    ignore = w_draw_segments(zip(hull,rotate(hull,1)),2,w_black,box);
+    ignore = w_add_text((250,20),"Click on window to remove",w_white,window);
+    ignore = w_get_input(window);  % wait for an event %
+    ignore = w_kill_window(window);
+in #hull $

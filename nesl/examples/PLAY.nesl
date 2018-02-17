@@ -1,0 +1,14 @@
+function expmod(b,e,m) =
+if e == 0 then 1
+else 
+  let pow = rem(expmod(b, e/2, m)^2,m)
+  in rem(select(evenp(e), pow, pow*b),m) $
+
+function FermatTest(n) =
+  let a = 2 + rand(n-2) in expmod(a,n,n) == a $
+
+% won't work for n > 46340 %
+function prime_p(n) = 
+let m = 5+round(ln(float(n)))
+in m == count({FermatTest(a): a in dist(n,m)}) $
+

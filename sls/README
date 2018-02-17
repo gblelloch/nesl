@@ -1,0 +1,8 @@
+This project comprises Lambda functions for running the interpreter of NESL language 
+(http://www.cs.cmu.edu/~scandal/nesl.html) on AWS Lambda, either directly or via API Gateway
+Deployed to AWS Lambda using serverless.com tool:
+  $ sls deploy
+Then copy the reported API Gateway URL to the HTML form, as a POST action
+with a single input field (e.g., named 'program') containing the input NESL program, e.g.:
+  {a * a : a in [3, -4, -9, 5] | a > 0};
+

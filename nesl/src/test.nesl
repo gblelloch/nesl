@@ -1,0 +1,733 @@
+%
+;;; To do: 
+;;;   Test PAIR and UNPAIR vcode instructions
+;;;   Add more tests for zero-length vectors
+;;;   Add more tests for seg permutes with different lengths in source and dest
+;;;   Test unzip
+;;;   Test hash functions
+%
+
+
+function test(str, v) =
+  let 
+    t1 = print_string(str); 
+    t2 = if v then t else print_string("........failed"); 
+    t3 = print_char(newline)
+  in 0 $
+
+function almost_eq(a, b) = (a - b < 0.001) $
+
+function test_rand_range(ignore) =
+  let 
+    val1 = rand(100); 
+    val2 = rand(200)
+  in 
+    (val1 > 0) and (val1 < 100) and (val2 > 0) and (val2 < 200) $
+
+function test_rand_seed(ignore) =
+  let
+    t1 = rand_seed(100);
+    r1 = rand(1000);
+    t2 = rand_seed(200);
+    r2 = rand(1000);
+    t3 = rand_seed(100);
+    r3 = rand(1000);
+  in
+    (r1 == r3) and (r1 /= r2) $
+
+function test_eql(ignore) =
+  eql([1,2,3], [1,2,3]) and not(eql([0,2,3], [1,2,3])) $
+
+function test_all(ignore) =
+  all([T,T,T,T]) and not(all([T,T,F,T])) and all([] BOOL) and
+  (all([3,6,7]) == 2) $
+
+function test_any(ignore) =
+  any([F,F,T,F]) and not(any([F,F,F,F])) and not(any([] BOOL)) and
+  (any([3,6,8]) == 15) $
+
+function test_sum(ignore) =
+  (8 == sum([2,3,3])) and (0 == sum([] INT)) $
+
+function test_product(ignore) =
+  (18 == product([2,3,3])) and (1 == product([] INT)) $
+
+function test_float_product(ignore) =
+  (18. == product([2.,3.,3.])) and (1. == product([] FLOAT)) $
+
+function test_parity(ignore) =
+  (parity([t,t,f,t])) and not(parity([t,t,f,t,f,t])) and
+  (parity([2,3,4,9]) == 12) and (parity([] int) == 0) $
+
+function test_plus_scan(ignore) =
+  eql([0,2,-2,1], plus_scan([2,-4,3,3])) $
+
+function test_float_plus_scan(ignore) =
+  eql([0.,2.,-1.], plus_scan([2.,-3.,3.])) $
+
+function test_mult_scan(ignore) =
+  eql([1,2,-6], mult_scan([2,-3,3])) $
+
+function test_float_mult_scan(ignore) =
+  eql([1.0,2.0,-6.0], mult_scan([2.0,-3.0,3.0])) $
+
+function test_max_val(ignore) =
+  eql(23, max_val([-5,23,-100,7,0,-2])) $
+
+function test_min_val(ignore) =
+  eql(-100, min_val([-5,23,-100,7000,0,-2])) $
+
+function test_max_scan(ignore) =
+  let vect = [-5,8,1]
+  in 
+    eql([-5,8,8], {max(v, m): v in vect; m in max_scan(vect)}) $
+
+function test_float_max_scan(ignore) =
+  let vect = [-5.0,8.0,1.0]
+  in 
+    eql([-5.0,8.0,8.0], {max(v, m): v in vect; m in max_scan(vect)}) $
+
+function test_min_scan(ignore) =
+  let vect = [5,-8,-1]
+  in 
+    eql([5,-8,-8], {min(v, m): v in vect; m in min_scan(vect)}) $
+
+function test_float_min_scan(ignore) =
+  let vect = [5.0,-8.0,-1.0]
+  in 
+    eql([5.0,-8.0,-8.0], {min(v, m): v in vect; m in min_scan(vect)}) $
+
+function test_or_scan(ignore) =
+  let vect = [F,F,F,T,F,F,F]
+  in eql([F,F,F,F,T,T,T], or_scan(vect)) $
+
+function test_and_scan(ignore) =
+  let vect=[T,T,T,F,T,F,T]
+  in eql([T,T,T,T,F,F,F], and_scan(vect)) $
+
+function test_xor_scan(ignore) =
+  let vect = [F,T,F,T,F,F,F]
+  in eql([F,F,T,T,F,F,F], xor_scan(vect)) $
+
+function test_int_or_scan(ignore) = 
+  eql([0,6,7,32775,32831,65535],or_scan([6,1,32768,63,32704,99])) $
+
+function test_int_and_scan(ignore) = 
+  eql([-1,32767,29,9,9,0],and_scan([32767,29,11,9,0,65535])) $
+
+function test_int_xor_scan(ignore) = 
+  eql([0,0,0,0,32767,0,32767,32764,32764],
+      xor_scan([0,0,0,32767,32767,32767,3,0,3])) $
+
+function test_permute(ignore) =
+  eql("wombat", permute("mowtab", [2,1,0,5,4,3]))
+  and eql("", permute("", [] INT)) $
+
+%
+function test_fpermute(ignore) =
+  eql([31, 33, 35, 39, 37],
+       fpermute_hack([30:40],[1000,0,-1000,1,0,2,0,4,0,3],
+                xor_scan(dist(t,10)),[100:105])) $
+%
+
+function test_permute_bool(ignore) =
+  eql([T,T,F,T,F,T], permute([F,F,T,T,T,T], [2,4,0,1,3,5])) and
+  eql([] BOOL, permute([] BOOL, [] INT)) $
+
+function test_put(ignore) =
+  eql("womtbat it", put("mowtab", [2,1,0,6,5,4], "testing it")) and
+  eql("testing it", put("", [] INT, "testing it")) $
+
+function test_put_bool(ignore) =
+  eql([T,F,F,T,F,T], put([F,T,T,F], [4,0,5,1], [F,F,F,T,F,F])) and
+  eql([T,T,T,T,T,T], put([] BOOL, [] INT, [T,T,T,T,T,T])) $
+
+function test_cond_put(ignore) =
+  eql("womting it", 
+      cond_put("mowtab", [2,1,0,6,5,4], [T,T,T,F,F,F], "testing it")) $
+
+function test_cond_put_bool(ignore) =
+  eql([T,T,T,F,T,F,F,F],
+      cond_put([F,T,T,T], [5,2,2,4], [T,T,F,F], [T,T,F,F,T,F,F,F])) $
+
+function test_get_float(ignore) = 
+  eql([117.0,128.0,139.0,150.0,161.0,172.0,183.0,194.0],
+     {float(j):j in [100:200]}->[17:99:11]) $
+
+function test_get_bool(ignore) =
+  eql([T,F,F,T,F,F,T,F],
+      {mod(j,3) == 0: j in [100:200]}->[17:99:11]) $
+
+function test_get(ignore) =
+  eql("tie", get("testing it", [3,4,1])) and
+  eql("", get("testing it", [] INT)) $
+
+function test_pack(ignore) =
+  eql("te rs", pack(zip("the horse", [T,F,T,T,F,F,T,T,F]))) $
+
+function test_pack_bool(ignore) =
+  eql([T,T,F,T,F], pack(zip([T,F,T,F,T,T,T,F,F], [T,F,T,T,F,F,T,T,F]))) $
+
+function test_pack_float(ignore) =
+  eql([0.0,2.0,4.0,5.0,7.0], pack(zip([0.0,1.0,2.0,3.0,4.0,5.0,6.0,7.0],
+                                      [T,F,T,F,T,T,F,T]))) $
+
+function within(a, bot, top) =
+  (a > bot) and (a < top) $
+
+function trunc_test(ignore) = trunc(3.2) == 3 $
+
+function floor_test(ignore) = floor(-3.2) == -4 $
+
+function ceil_test(ignore) = ceil(-3.2) == -3 $
+
+function round_test(ignore) = round(4.6) == 5 $
+
+function float_test(ignore) = 1.0 == float(1) $
+
+function ln_test(ignore) =
+ almost_eq(ln(10.0), 2.30259) and almost_eq(ln(1.0), 0.0) $
+
+function tanh_test(ignore) =
+ almost_eq(tanh(1.0), 0.761594) and almost_eq(tanh(0.0), 0.0) $
+
+function cosh_test(ignore) =
+ almost_eq(cosh(1.0), 1.54308) and almost_eq(cosh(0.0), 1.0) $
+
+function sinh_test(ignore) =
+ almost_eq(sinh(1.0), 1.1752) and almost_eq(sinh(0.0), 0.0) $
+
+function atan_test(ignore) =
+ almost_eq(0.7854, atan(1.0)) and almost_eq(0.0, atan(0.0)) $
+
+function acos_test(ignore) =
+ almost_eq(1.5708, acos(0.0)) and almost_eq(0.0, acos(1.0)) $
+
+function asin_test(ignore) =
+ almost_eq(1.5708, asin(1.0)) and almost_eq(0.0, asin(0.0)) $
+
+function tan_test(ignore) =
+ almost_eq(tan(0.7854), 1.0) and almost_eq(tan(0.0), 0.0) $
+
+function cos_test(ignore) =
+ almost_eq(cos(1.5708), 0.0) and almost_eq(cos(0.0), 1.0) $
+
+function sin_test(ignore) =
+ almost_eq(sin(1.5708), 1.0) and almost_eq(sin(0.0), 0.0) $
+
+function exp_test(ignore) =
+ almost_eq(exp(2.30259), 10.0) and almost_eq(exp(0.0), 1.0) $
+
+function testscalar(ignore) =
+  let 
+    te = test("int =", 2 == 2); 
+    te = test("int /=", 3 /= 2); 
+    te = test("int >", -2 > -3); 
+    te = test("int <", -3 < -2); 
+    te = test("int <=", 2 <= 2 and -3 <= -2); 
+    te = test("int >=", -2 >= -2 and -2 >= -3); 
+    te = test("int +", 4 + 5 == 9); 
+    te = test("int -", 4 - 5 == -1); 
+    te = test("int *", 7 * 8 == 56); 
+    te = test("int /", 7 / 2 == 3); 
+    te = test("int remainder", rem(7, 2) == 1); 
+    te = test("float =", 2.0 == 2.0); 
+    te = test("float /=", 3.0 /= 2.0); 
+    te = test("float >", -2.0 > -3.0); 
+    te = test("float <", -3.0 < -2.0); 
+    te = test("float <=", 2.0 <= 2.0 and -3.0 <= -2.0); 
+    te = test("float >=", -2.0 >= -2.0 and -2.0 >= -3.0); 
+    te = test("float +", 4.0 + 5.0 == 9.0); 
+    te = test("float -", 4.0 - 5.0 == -1.0); 
+    te = test("float *", 7.0 * 8.0 == 56.0); 
+    te = test("float /", 7.0 / 2.0 == 3.5); 
+    te = test("double float + and -"
+              , within(9.000000000000998e+40
+                        - (3.9999999999999997e+40 + 4.999999999999999e+40)
+                       , 8.999999999999999e+27, 1.0999999999999999e+28)); 
+    te = test("double float *"
+              , within(3.0e+30 * 3.9999999999999997e+30
+                       , 1.1999999999999e+61, 1.2000000000000999e+61)); 
+    te = test("double float /"
+              , within(7.000000000000001e+60 / 2.0e+30
+                       , 3.4999999999999e+30, 3.5000000000000997e+30)); 
+    te = test("trunc", trunc_test(0));
+    te = test("floor", floor_test(0));
+    te = test("ceil", ceil_test(0));
+    te = test("round", round_test(0));
+    te = test("float", float_test(0));
+    te = test("ln",ln_test(0)); 
+    te = test("exp",exp_test(0)); 
+    te = test("sin",sin_test(0)); 
+    te = test("cos",cos_test(0)); 
+    te = test("tan",tan_test(0)); 
+    te = test("asin",asin_test(0)); 
+    te = test("acos",acos_test(0)); 
+    te = test("atan",atan_test(0)); 
+    te = test("sinh",sinh_test(0)); 
+    te = test("cosh",cosh_test(0)); 
+    te = test("tanh",tanh_test(0)); 
+    te = test("int select", select(t, 2, 3) == 2); 
+    te = test("bool select", select(f, f, t)); 
+    te = test("float select", select(t, 2.0, 3.0) == 2.0); 
+    te = test("bool not", not(f)); 
+    te = test("bool or", t or f); 
+    te = test("bool xor", (t xor f) and not(t xor t)); 
+    te = test("bool and", t and t); 
+    te = test("int not", -1 == not(0)); 
+    te = test("int or", 3 == (1 or 2)); 
+    te = test("int xor", 6 == (5 xor 3)); 
+    te = test("int and", 2 == (3 and 6)); 
+    te = test("lshift", -2 == lshift(-1, 1) and 4 == lshift(1, 2)); 
+    te = test("rshift", 0 == rshift(1, 1) and 1 == rshift(4, 2)); 
+    te = test("sqrt", 6.0 == sqrt(36.0)); 
+    te = test("isqrt", 6 == isqrt(36)); 
+    te = test("rand (within range)", test_rand_range(0));
+    te = test("rand_seed", test_rand_seed(0));
+    te = test("btoi", 1 == btoi(t))
+  in 0 $
+
+function testpscalar(ignore) =
+  let 
+    len = 10000;
+    te = test("parallel sin",all({almost_eq(sin(i), 1.0):
+				  i in dist(1.5708,len)})); 
+    te = test("parallel exp",all({almost_eq(exp(i), 10.0):
+				  i in dist(2.30259,len)})); 
+    te = test("parallel ln",all({almost_eq(ln(i), 2.30259)
+				 :i in dist(10.0,len)})); 
+    te = test("parallel round", all({round(i) == 5: i in dist(4.6,len)}));
+    te = test("parallel ceil", all({ceil(i) == -3: i in dist(-3.2,len)}));
+    te = test("parallel floor", all({floor(i) == -4: i in dist(-3.2,len)}));
+    te = test("parallel trunc", all({trunc(i) == 3: i in dist(3.2,len)}));
+    te = test("parallel float", all({1.0 == float(i): i in dist(1,len)}))
+in 0 $
+
+function testvector(ignore) =
+  let 
+    len = 2; 
+    seglen = dist(2,1000); 
+    te = test("bool all", test_all(len)); 
+    te = test("bool any", test_any(len)); 
+    te = test("int sum", test_sum(len)); 
+    te = test("int product", test_product(len)); 
+    te = test("float product", test_float_product(len)); 
+    te = test("int parity", test_parity(len)); 
+    te = test("eql", test_eql(len)); 
+    te = test("int dist", eql(dist(1, 2), [1,1])); 
+    te = test("int plus_scan", test_plus_scan(len)); 
+    te = test("int mult_scan", test_mult_scan(len)); 
+    te = test("int max_val", test_max_val(len)); 
+    te = test("int min_val", test_min_val(len)); 
+    te = test("int max_scan", test_max_scan(len)); 
+    te = test("int min_scan", test_min_scan(len)); 
+    te = test("float plus_scan", test_float_plus_scan(len)); 
+    te = test("float mult_scan", test_float_mult_scan(len)); 
+    te = test("float max_scan", test_float_max_scan(len)); 
+    te = test("float min_scan", test_float_min_scan(len)); 
+    te = test("bool or_scan", test_or_scan(len)); 
+    te = test("bool and_scan", test_and_scan(len)); 
+    te = test("bool xor_scan", test_xor_scan(len)); 
+    te = test("int or_scan", test_int_or_scan(len)); 
+    te = test("int and_scan", test_int_and_scan(len)); 
+    te = test("int xor_scan", test_int_xor_scan(len)); 
+    te = test("int permute", test_permute(len)); 
+%    te = test("int fpermute", test_fpermute(len));  %
+    te = test("bool permute", test_permute_bool(len)); 
+    te = test("int put", test_put(len)); 
+    te = test("bool put", test_put_bool(len)); 
+    te = test("int cond_put", test_cond_put(len)); 
+    te = test("bool cond_put", test_cond_put_bool(len)); 
+    te = test("int get", test_get(len)); 
+    te = test("float get", test_get_float(len)); 
+    te = test("bool get", test_get_bool(len)); 
+    te = test("int pack", test_pack(len)); 
+    te = test("bool pack", test_pack_bool(len)); 
+    te = test("float pack", test_pack_float(len)); 
+    te = test("int extract", eql(7, [5,1,7,2][2]));
+    te = test("float extract", eql(7.0, [5.0,1.0,7.0,2.0][2]));
+    te = test("bool extract", eql(F, [T,T,F,T][2]));
+    te = test("float rep", eql([0.0,1.0,2.0,999.0,4.0],
+                               rep({float(i): i in [0:5]},999.0,3)));
+    te = test("seg int dist", eql(["a","ff"], 
+				  {dist(x, y): x in "af"; y in [1,2]})); 
+    te = test("seg int dist (zero len)", 
+	      eql(["a","","ff"], {dist(x, y): x in "ahf"; y in [1,0,2]})); 
+    te = test("seg int sum",
+              eql([8,2], {sum(x): x in [[2,3,3],[2]]})); 
+    te = test("seg int sum (zero len)", 
+	      eql([8,0,2], {sum(x): x in [[2,3,3],[] INT,[2]]})); 
+    te = test("elt seg", eql("foo", ["wombat","foo","horse"][1])); 
+    te = test("elt seg (zero len)"
+              , eql("", ["wombat","","horse"][1])); 
+    te = test("dist seg", eql(dist("foo", 4)[2], "foo")); 
+    te = test("dist seg (zero len)", eql(dist("", 4)[2], "")); 
+    te = test("seg int plus_scan"
+              , all({test_plus_scan(seglen): seglen})); 
+    te = test("seg int max_val"
+              , all({test_max_val(seglen): seglen})); 
+    te = test("seg int min_val"
+              , all({test_min_val(seglen): seglen})); 
+    te = test("seg int max_scan"
+              , all({test_max_scan(seglen): seglen})); 
+    te = test("seg int min_scan"
+              , all({test_min_scan(seglen): seglen})); 
+    te = test("seg int permute"
+              , all({test_permute(seglen): seglen})); 
+%    te = test("seg int fpermute"
+              , all({test_fpermute(seglen): seglen}));  %
+    te = test("seg bool permute"
+              , all({test_permute_bool(seglen): seglen})); 
+    te = test("seg int put", all({test_put(seglen): seglen})); 
+    te = test("seg bool put"
+              , all({test_put_bool(seglen): seglen})); 
+    te = test("seg int cond_put"
+              , all({test_cond_put(seglen): seglen})); 
+    te = test("seg bool cond_put"
+              , all({test_cond_put_bool(seglen): seglen})); 
+    te = test("seg int get", all({test_get(seglen): seglen})); 
+    te = test("seg int pack", all({test_pack(seglen): seglen})); 
+    te = test("seg bool pack"
+              , all({test_pack_bool(seglen): seglen}));
+    te = test("seg float pack"
+              , all({test_pack_float(seglen): seglen}))
+  in 0 $
+
+function test1(ignore) =
+  eql({get(x, y): x in [[1],[4,11]]; y in [[] INT,[1]]},
+      [[] INT,[11]]) $
+
+function test2(ignore) =
+  eql(append("dog", "cat"), "dogcat") $
+
+function test3(ignore) =
+  eql({join(x, y, z, w):
+       x in ["dog","cat"]; 
+       y in [[0,2,4],[0,1,2]]; 
+       z in ["cow","horse"]; 
+       w in [[1,3,5],[3,4,5,6,7]]},
+      ["dcoogw","cathorse"]) $
+
+function test4(ignore) =
+  eql({append(x, y): 
+       x in ["dog","cat"]; 
+       y in ["cow","horse"]},
+      ["dogcow","cathorse"]) $
+
+function test5(ignore) =
+  eql(flag_merge([F,T], [2], [3]), [2,3]) $
+
+function test6(ignore) =
+  eql(flag_merge([F,T], [[2,3]], [[4,5]]), [[2,3],[4,5]]) $
+
+function testfuncs(ignore) =
+  let 
+    te = test("test1: (v.get)", test1(0)); 
+    te = test("test2: (append)", test2(0)); 
+    te = test("test3: (v.join)", test3(0)); 
+    te = test("test4: (v.append)", test4(0)); 
+    te = test("test5: (flag_merge)", test5(0)); 
+    te = test("test6: (flag_merge v.v.int)", test6(0))
+  in 0 $
+
+function bigtest_dist_eql(len) =
+  not(eql(dist(5, len), dist(6, len))) $
+
+function bigtest_dist_reduce(len) =
+  len * 5 == sum(dist(5, len)) $
+
+function bigtest_index_scan(len) =
+  eql(index(len), plus_scan(dist(1, len))) $
+
+function bigtest_les(len) =
+  len / 2
+   == count({x < len / 2: x in index(len)}) $
+
+function bigtest_permute(len) =
+  let reverse = {len - 1 - x: x in index(len)}
+  in eql(reverse, permute(index(len), reverse)) $
+
+function bigtest_get(len) =
+  let 
+    vals = index(2 * len); 
+    indices = {len / 2 + x: x in index(len)}
+  in eql(indices, get(vals, indices)) $
+
+function bigtest_pack(len) =
+  eql(index(len / 2)
+      , pack(zip(index(len), {x < len / 2: x in index(len)}))) $
+
+function bigtest(len) =
+  let 
+    te = test("bigtest dist and eql", bigtest_dist_eql(len)); 
+    te = test("bigtest dist and reduce", bigtest_dist_reduce(len)); 
+    te = test("bigtest index and scan", bigtest_index_scan(len)); 
+    te = test("bigtest <", bigtest_les(len)); 
+    te = test("bigtest permute", bigtest_permute(len)); 
+    te = test("bigtest get", bigtest_get(len)); 
+    te = test("bigtest pack", bigtest_pack(len)); 
+    seglen = append(dist(len / 6, 1), vpair(len / 2, len / 3)); 
+    te = test("segmented bigtest dist and eql",
+              all({bigtest_dist_eql(seglen): seglen})); 
+    te = test("segmented bigtest dist and reduce",
+              all({bigtest_dist_reduce(seglen): seglen})); 
+    te = test("segmented bigtest index and scan",
+              all({bigtest_index_scan(seglen): seglen})); 
+    te = test("segmented bigtest <", all({bigtest_les(seglen): seglen})); 
+    te = test("segmented bigtest permute", 
+	      all({bigtest_permute(seglen): seglen})); 
+    te = test("segmented bigtest get", all({bigtest_get(seglen): seglen})); 
+    te = test("segmented bigtest pack", all({bigtest_pack(seglen): seglen}))
+  in 0 $
+
+function seg_prim_test(ignore) =
+  let 
+    te = test("length", eql(3, #["the","big","horse"])); 
+    te = test("length bool", eql([7,0,3], 
+                    {#x: x in [[T,F,T,F,T,F,T],[]bool,[T,T,T]]}));
+    te = test("length float", eql([1,0,3], 
+                    {#x: x in [[3.0],[]float,[2.0,1.0,0.0]]}));
+    te = test("dist", eql(["the","the","the"], dist("the", 3))); 
+    te = test("rep", eql(["this","dog","a"],
+                         rep(["this","is","a"], "dog", 1))); 
+    te = test("elt", eql("is", ["this","is","a"][1])); 
+    te = test("permute", eql(["a","this","is"],
+                             permute(["this","is","a"], [1,2,0]))); 
+    te = test("get", eql(["is","this","a","is"],
+                         get(["this","is","a"], [1,0,2,1]))); 
+    te = test("put", let 
+                       vals = put(["check","new","values"],
+                                  [1,3,1], 
+				  ["this","is","another","test"])
+                     in 
+                       eql(vals, ["this","values","another","new"]) or
+	               eql(vals, ["this","check","another","new"])); 
+    te = test("pack", eql(["this","test"],
+                          pack(zip(["this","is","another","test"], [T,F,F,T]))))
+  in 0 $
+
+function nesl_test(ignore) =
+  let 
+    te = test("reverse", eql("format", reverse("tamrof"))); 
+    te = test("reverse nested", eql(["the","big","horse"],
+                                    reverse(["horse","big","the"]))); 
+    te = test("append", eql("the mouse", append("the ", "mouse"))); 
+    te = test("append nested", eql(["the","big","horse"],
+                                   append(["the","big"], ["horse"]))); 
+    te = test("cons", eql("format", cons(`f, "ormat"))); 
+    te = test("cons nested", eql(["the","big","horse"]
+                                 , cons("the", ["big","horse"]))); 
+    te = test("snoc", eql("format", snoc("forma", `t))); 
+    te = test("snoc nested", eql(["the","big","horse"]
+                                 , snoc(["the","big"], "horse"))); 
+    te = test("vpair", eql("ab", vpair(`a, `b))); 
+    te = test("vpair nested", eql(["the","horse"], vpair("the", "horse"))); 
+    te = test("vsep", eql((`a, `b), vsep("ab"))); 
+    te = test("vsep nested", eql(("the", "horse"), vsep(["the","horse"]))); 
+    te = test("subseq", eql("omba", subseq("wombat", 1, 5))); 
+    te = test("subseq nested", eql(["big","brown"],
+                                   subseq(["the","big","brown","horse"], 
+					  1, 3))); 
+    te = test("drop", eql("mbat", drop("wombat", 2))); 
+    te = test("drop nested", eql(["brown","horse"],
+                                 drop(["the","big","brown","horse"], 2))); 
+    te = test("take", eql("womb", take("wombat", 4))); 
+    te = test("take nested", eql(["the","big"],
+                                 take(["the","big","brown","horse"], 2))); 
+    te = test("flatten", eql("thebighorse", flatten(["the","big","horse"]))); 
+    te = test("partition", eql(["the","big","horse"],
+                               partition("thebighorse", [3,3,5]))); 
+    te = test("split", eql(["hebghe","tiors"], 
+			   split("thebighorse", 
+				 {x > `h: x in "thebighorse"}))); 
+    te = test("bottop", eql(["thebig","horse"], bottop("thebighorse"))); 
+    te = test("rotate", eql("horsethebig", rotate("thebighorse", 5)))
+  in 0 $
+
+function string_test(ignore) =
+  let 
+    te = test("string int", eql("234", @234)
+                             and (eql("-234", @-234) and eql("0", @0))); 
+    te = test("string char", eql("`a", @`a)); 
+    te = test("string bool", eql("t", @t) and eql("f", @f)); 
+    %te = test("string float",eql(["0.0","0.1","1.0","-1.0","10.0","100.0",
+		    "1000.0","10000.0","100000.0","1000000.0",
+		    "1.0e+7","0.1","0.01","0.001","1.0e-4"],
+	            {@v:v in [.0,.1,1.,-1.,1e1,1e2,1e3,1e4,
+		    1e5,1e6,1e7,1e-1,1e-2,1e-3,1e-4]}));%
+    te = test("string vector", eql("[2, 3, 4]", @[2,3,4])); 
+    te = test("string pair", eql("(2, 3)", @(2, 3))); 
+    te = test("string pairs", eql("(2, 3, 4)", @(2, 3, 4))); 
+    te = test("string pairs2", eql("((2, 3), 4)", @((2, 3), 4)))
+  in 0 $
+
+function write_read_test(a,b) =
+  let 
+    foo = write_object_to_file(a,"/tmp/fooxxxx")
+  in
+   eql(a,read_object_from_file(b,"/tmp/fooxxxx")) $
+
+function write_read_string_test(_) =
+let
+    test_str = {code_char(rand(i)): i in dist(128,1000)};
+    foo = write_string_to_file(test_str,"/tmp/fooxxxx");
+in eql(test_str,read_string_from_file("/tmp/fooxxxx")) $
+
+function io_test(ignore) =
+  let 
+    te = test("write-read int", write_read_test(5,0));
+    te = test("write-read float", write_read_test(5.0,0.0));
+    te = test("write-read char", write_read_test(`f,`a));
+    te = test("write-read bool", write_read_test(t,f));
+    te = test("write-read vect int", write_read_test([2,3,4],[] int));
+    te = test("write-read vect struct", 
+	      write_read_test([(2,"foo",f),(7,"wombat",t)],
+			      [] (int,[char],bool)));
+    te = test("write-read string test", write_read_string_test(0));
+  in 0 $
+
+function timer_test(ignore) = 
+  (let (x,y)=time({rand(j): j in dist(9999,99990)}) in y) > 0.0 $
+
+function spawn_test(ignore) =
+  let 
+      ((in_str,out_str,err_str),err) =  spawn("cat -u",nullstr,nullstr,stderr);
+      foo = write_object(23,in_str);
+      result = read_object(0,out_str);
+  in eql((23,t,""),result) $
+      
+function test_nested_over(ignore) =
+  eql([[[2,3],[2,3]],[[4,5],[4,5]]], {{v: a in v}: v in [[2,3],[4,5]]}) $
+
+function test_collect(ignore) =
+let result = collect([(2, "this"), (3, "a"), (2, "is"), (5, "test")]);
+    vals2 = {(k,v) in result | k == 2}
+in (#result == 3) and (#vals2 == 1) and (#rest(vals2[0]) == 2) $
+
+function test_select(n) =
+let
+    vals = {rand(i) : i in dist(10^6,n)};
+    k = rand(n);
+    v1 = kth_smallest(vals,k);
+    v2 = sort(vals)[k];
+in v1 == v2 $
+
+function test_remove_duplicates(n) =
+let
+    vals = {rand(i) : i in dist(10^6,n)};
+    v1 = sort(remove_duplicates(vals));
+    so = sort(vals);
+    v2 = {s in so; n in next(so,-1)| n /= s}
+in eql(v1,v2) $
+
+function other_ops_test(ignore) =
+  let
+      len = 1000;
+      te = test("int sort", eql(sort([7,-2,1,-3,6]),[-3,-2,1,6,7]));
+      te = test("int rank", 
+                eql(rank([10,-5,0,10,-10,100,10]),[3,1,2,4,0,6,5]));
+      te = test("int rank_down", 
+                eql(rank_down([10,-5,0,10,-10,100,10]),[1,5,4,2,6,0,3]));
+      te = test("float rank", 
+                eql(rank([10.0,-5.0,0.0,10.0,-10.0,100.0,10.0]),
+                    [3,1,2,4,0,6,5]));
+      te = test("float rank_down", 
+                eql(rank_down([10.0,-5.0,0.0,10.0,-10.0,100.0,10.0]),
+                    [1,5,4,2,6,0,3]));
+      te = test("float sort", eql(sort([7.0,-2.0,1.0,-3.0,6.0]),
+				  [-3.0,-2.0,1.0,6.0,7.0]));
+      te = test("kth_smallest",test_select(len));
+      te = test("remove_duplicates",test_remove_duplicates(len));
+      te = test("union", eql(#union([7,2,1,3,4],[7,5,1,2]),6));
+      te = test("intersection", eql(#intersection([7,2,1,3,4],[7,5,1,2]),3));
+      te = test("search_for_subseqs",
+	        eql(search_for_subseqs("foo","foofobffoobar"),[0,7]));
+      te = test("collect",test_collect(0))
+  in 0 $
+
+function apply(a,b) = a(b);
+function papply(a,b) = {a(b):b};
+
+function test_function_types(ignore) =
+let
+    te = test("function: apply", eql(apply(abs,-3),3));
+    te = test("function: parallel apply 1", eql({apply(abs,a): a in [-2,-3,4]},
+						[2,3,4]));
+    te = test("function: parallel apply 2",eql(papply(abs,[-2,-3,4]),[2,3,4]));
+    te = test("function: eql",eql(sin,sin));
+    te = test("function: string",eql("function",@sin));
+    te = test("function: dist, elt",eql(dist(sin,3)[0],sin));
+    te = test("function: pack",eql(pack([(sin,t),(sin,f),(sin,t)]),
+				   dist(sin,2)))
+in 0 $
+
+datatype foo(int,int) $
+datatype bar(int,a,b) :: a in any; b in any $
+datatype baz(foo,bar(bool,float)) $
+
+function test_datatypes(ignore) =
+let
+    c = foo(2,3);
+    foo(a,b) = c;
+    d = baz(c,bar(a,t,2.1));
+    baz(foo(h,i),bar(j,k,l)) = d;
+    m = {foo(a,2): a in [4,5,6]}
+in (h == 2 and i == 3 and j == 2 and k and l == 2.1 
+    and eql(m,[foo(4,2),foo(5,2),foo(6,2)])) $
+
+function other_test(ignore) =
+  let 
+      te = test("datatypes", test_datatypes(0));
+      te = test("nested over", test_nested_over(0));
+      te = test("timer", timer_test(0));
+      te = test("spawn", spawn_test(0))
+  in 0 $
+
+
+function testall(a) =
+  let 
+    te = test("checking the fail mechanism, failed message should appear", f); 
+
+    te = print_char(newline);
+    te = test("test of all primitive functions", t); 
+    te = testscalar(a); 
+    te = testpscalar(a); 
+    te = testvector(a); 
+
+    te = print_char(newline);
+    te = test("some other tests on short vectors", t); 
+    te = testfuncs(a); 
+
+    te = print_char(newline);
+    te = test("test of some functions on long vectors", t); 
+    te = bigtest(50000); 
+
+    te = print_char(newline);
+    te = test("test the nesl primitives on nested vectors", t); 
+    te = seg_prim_test(a); 
+
+    te = print_char(newline);
+    te = test("nesl vector functions", t); 
+    te = nesl_test(a); 
+
+    te = print_char(newline);
+    te = test("string tests", t); 
+    te = string_test(a); 
+
+    te = print_char(newline);
+    te = test("io tests", t); 
+    te = io_test(a); 
+
+    te = print_char(newline);
+    te = test("function passing tests", t); 
+    te = test_function_types(a); 
+
+    te = print_char(newline);
+    te = test("tests on compound operations", t); 
+    te = other_ops_test(a); 
+
+    te = print_char(newline);
+    te = test("other tests", t); 
+    te = other_test(a);
+
+  in 0 $

@@ -1,2 +1,6 @@
 # nesl
-A server for running nesl code
+NESL programming language and tutorial
+
+- `nesl`: source code
+- `sls`: serverless deployment of the interpreter on AWS
+

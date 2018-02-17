@@ -1,0 +1,23 @@
+function slow_select(a,k) =
+  max_val({y in a | count({x < y: x in a}) <= k}) $
+
+function select_recursive(a,k,sample_size,delta) =
+if #a <= sample_size then slow_select(a,k)
+else let 
+    % show   = print_line(@#a); %
+    kth    = k*sample_size/#a;
+    sample = a->{rand(i): i in dist(#a,sample_size)};
+    kmin   = slow_select(sample, kth - delta);
+    kmax   = slow_select(sample, kth + delta);
+    offset = count({e < kmin : e in a });	
+    new_a  = {e in a | e >= kmin and e <= kmax};
+in 
+    if (k < offset) or (k >= offset + #new_a) 
+    then select_recursive(a, k, sample_size, delta)
+    else select_recursive(new_a, k-offset, sample_size, delta) $
+
+function fast_select(a,k) =
+let
+    sample_size = .5*sqrt(float(#a));
+    delta = .5*sqrt(sample_size*ln(sample_size));
+in select_recursive(a,k,round(sample_size),round(delta)) $

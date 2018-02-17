@@ -1,0 +1,11 @@
+function expmod(b,e,m) =
+if e == 1 then 1
+else 
+  let pow = expmod(b, e/2, m)^2
+  in select(evenp(e), pow, pow*b) % m $
+
+function FermatTest(n) =
+  let a = 2 + rand(n-2) in expmod(a,n,n) == a $
+
+function CheckPrime(n) = count([FermatTest(a): a in dist(n,10)]) $
+

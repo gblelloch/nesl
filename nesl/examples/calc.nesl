@@ -1,0 +1,105 @@
+
+function group_by_separator(str, space_chars, token_chars) =
+  let 
+    space_array = dist(f,256) <- {char_code(c),t: c in space_chars};
+    mark_array = space_array <- {char_code(c),t: c in token_chars};
+    space_flags = space_array->{char_code(c) : c in str};
+    mark_flags = mark_array->{char_code(c) : c in str};
+    foos = {c,fl or pfl: fl in mark_flags; pfl in previous(mark_flags,t);
+		  c in str; sfl in space_flags | not(sfl)};
+    nstr,flags = unzip(foos);
+in partition(nstr,length_from_flags(flags)) $
+
+function parse_exp(a,b) : ([[char]], [([char], [float])]) -> [float] = [0.0] $
+
+function parse_array(exp) =
+let 
+    i = find("]",exp);
+    value = {first(parse_float(i)): i in subseq(exp,1,i)};
+    rest = drop(exp,i+1)
+in value,rest $
+
+function parse_paren(exp,state) =
+let 
+    i = find(")",exp);
+    value = parse_exp(subseq(exp,1,i),state);
+    rest = drop(exp,i+1)
+in value,rest $
+
+function get_value(var_name,state) =
+let 
+    i = find(var_name,{first(bind):bind in state});
+in 
+    if not(i == -1) then rest(state[i])
+    else 
+	let foo = print_line("variable " ++ var_name ++ " not found")
+	in [] float $
+
+function parse_value(exp,state) =
+let 
+    head = exp[0];
+in
+    if eql(head,"[") then parse_array(exp)
+    else if eql(head,"(") then parse_paren(exp,state)
+    else 
+	let (val,flag) = parse_float(head)
+	in 
+	    if flag then [val],drop(exp,1)
+	    else get_value(exp[0],state),drop(exp,1) $
+
+function scalar_extend(v1,v2) =
+    if (#v1 == 1) and (#v2 > 1) then dist(v1[0],#v2) else v1 $
+
+function apply_binary_op(op,val1,val2) =
+    if      eql(op,"+") then {val1+val2:val1;val2}
+    else if eql(op,"*") then {val1*val2:val1;val2}
+    else if eql(op,"/") then {val1/val2:val1;val2}
+    else if eql(op,"-") then {val1-val2:val1;val2}
+    else if eql(op,"^") then {expt(val1,val2):val1;val2}
+    else 
+	let message = print_string("unknown operator: " ++ op)
+	in [] float $
+
+function parse_exp(exp,state) =
+let 
+    (val1,rest) = parse_value(exp,state)
+in 
+    if (#rest == 0) then val1
+    else
+	let 
+	    op   = rest[0];
+	    val2 = parse_exp(drop(rest,1),state);
+	    v1 = scalar_extend(val1,val2);
+	    v2 = scalar_extend(val2,val1);
+	in 
+	    if (#v1 == #v2) then apply_binary_op(op,v1,v2)
+	    else
+		let message = print_line("array lengths don't match.")
+		in [] float $
+
+function parse_line(words,state) =
+if (if #words == 1 then f else eql(words[1],"="))
+then
+    let 
+	var_name = words[0];
+	var_value = parse_exp(drop(words,2),state);
+	new_state = [(var_name,var_value)] ++ state
+    in var_value,new_state
+else
+    parse_exp(words,state),state $
+
+function next_command(state) =
+let 
+    exp = prompt("calc> "); 
+    words = group_by_separator(exp," 	","+*/-[]()=")
+in
+    if (#exp == 0) then t             % exit %
+    else if eql(words[0],"exit") then t   % exit %
+    else 
+	let
+	    (value,new_state) = parse_line(words,state);
+	    foo = print_line(if #value == 1 then @value[0] else @value);
+	in next_command(new_state) $
+
+% Starts the shell in the current directory %
+function calc(ignore) = next_command([] ([char],[float])) $

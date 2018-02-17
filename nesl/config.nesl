@@ -1,0 +1,107 @@
+%
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; DEFINITION OF THE MACHINE CONFIGURATIONS.                              ;;
+;;                                                                        ;;
+;; If you are NOT going to be using remote access, then this file can     ;;
+;; probably be left alone.  If you are going to use remote access, then   ;;
+;; you will need to set up the variables and configurations appropriately.;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+%
+
+% This definition is the default %
+defconfig local;
+
+% This definition is for a server %
+defconfig server,
+  memory_size:=100000000;
+  
+% EXAMPLE 1
+  A remote machine that shares a file system.
+  Both machines must support rsh.
+  The temp_dir must be accessable by both machines.
+  This will use the default interpreter (nesl/bin/vinterp).
+%
+defconfig foo, 
+  rsh_command  := "rsh -l joeuser foo.cs.uvwx.edu",
+  temp_dir     := "/afs/uvwx.cmu.edu/user/joeuser/",
+  machine_name := "Joe Foo's machine";
+
+
+% EXAMPLE 2
+  A remote machine that does not share a file system.
+  foreground-copy is used as the foreground command.
+  No temp_dir is necessary, will use /tmp/ by default 
+  An interpreter file other than the default (vinterp) is specified. 
+%
+defconfig smack, 
+  rsh_command  := "rsh -l jackuser smack.cs.uvwx.edu",
+  interp_file  := "/afs/cs.uvwx.edu/user/joeuser/nesl/bin/vinterp.alpha",
+  machine_name := "Jack Smack's Alpha",
+  foreground_command := "foreground-copy";
+
+
+% EXAMPLE 3
+  A remote Connection Machine CM2 on a shared file system.
+%
+defconfig psc_cm2,
+  memory_size  := 8388608,
+  interp_file  := "/afs/cs.uvwx.edu/user/joeuser/nesl/bin/vinterp.cm2",
+  temp_dir     := "/afs/cs.uvwx.edu/user/joeuser/tmp/",
+  rsh_command  := "rsh -l joeuser cmsunb.psc.edu /usr/local/bin/cmattach",
+  machine_name := "CM2 at PSC",
+  foreground_command := "foreground-cm2",
+  background_command := "background-cm2";
+
+
+% EXAMPLE 4
+  A remote Connection Machine CM2 using exclusive mode (8k processors)
+%
+defconfig psc_cm2_exclusive,
+  memory_size  := 8388608,
+  interp_file  := "/afs/cs.uvwx.edu/user/joeuser/nesl/bin/vinterp.cm2",
+  temp_dir     := "/afs/cs.uvwx.edu/user/joeuser/tmp/",
+  rsh_command  :=  "rsh -l joeuser cmsunb.psc.edu /usr/local/bin/cmattach -e",
+  machine_name := "CM2 at PSC",
+  foreground_command := "foreground-cm2";
+
+
+% EXAMPLE 5
+  A remote Cray Y-MP on a shared file system.
+  The default foreground command works fine.
+%
+defconfig psc_cray_c90,
+  memory_size  := 3600000,
+  interp_file  := "/afs/cs.uvwx.edu/user/joeuser/nesl/bin/vinterp.cray",
+  temp_dir     := "/afs/cs.uvwx.edu/user/joeuser/tmp/",
+  rsh_command  := "rsh -l joeuser mario.psc.edu",
+  machine_name := "CRAY C90 at PSC",
+  background_command := "background-cray";
+
+
+% EXAMPLE 6
+  A remote Cray Y-MP with NO shared file system.
+  Uses foreground-copy.
+%
+defconfig psc_cray_c90_noafs,
+  memory_size  := 3600000,
+  interp_file  := "/afs/cs.uvwx.edu/user/joeuser/nesl/bin/vinterp.cray",
+  rsh_command  := "rsh -l joeuser mario.psc.edu",
+  machine_name := "CRAY C90 at PSC",
+  foreground_command := "foreground-copy";
+
+
+% EXAMPLE 7
+  A remote Connection Machine CM-5 with NO shared file system.
+  Uses foreground-cm5, and specifies 32 nodes.  Timesharing use is
+  assumed so it only allocates 0.5 Mw (4 Mb) per node by default.
+%
+defconfig ncsa_cm5,
+  memory_size	:= 16777216,
+  interp_file	:= "/afs/cs.uvwx.edu/user/joeuser/nesl/bin/vinterp.cm5",
+  rsh_command	:= "rsh -l joeuser cm5.ncsa.uiuc.edu",
+  max_time	:= 60,
+  arguments	:= "32",
+  machine_name	:= "CM5 at NCSA (32 nodes)",
+  foreground_command := "foreground-cm5";
+
+

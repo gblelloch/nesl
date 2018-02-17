@@ -1,0 +1,15 @@
+(defprimtype int)
+(defprimtype bool)
+(defprimtype float)
+(defprimtype char)
+(defprimtype segdes)
+
+(deftypeclass number (int float))
+(deftypeclass logical (int bool))
+(deftypeclass ordinal (number int float char))
+(deftypeclass scalar (ordinal number logical int float char bool))
+
+(defrec (pair a b) (a any) (b any))
+(defop (first (pair a b)) a)
+(defop (rest (pair a b)) b)
+(defrec (vector segdes a) (a any))

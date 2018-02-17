@@ -1,0 +1,43 @@
+function insert_internal(h,i,table) =
+if #h == 0 then [] int
+else
+    let
+	len = #table;
+	ran = {rem(h + i^2,len) : h};
+	flags = {id == -1: id in table->ran};
+	idx = [0:#ran];
+	newtable = table<-zip(ran,idx);
+	ret = pack_index({idx /= nt or not(flags): 
+			  idx; flags; nt in newtable->ran})
+in ran <- {(i,r): i in ret; r in fast_insert_internal(h->ret,i+1,newtable)} $
+
+function search_internal(hk,i,table) =
+if #hk == 0 then identity({v: fl,nk,v in table})
+else
+  let len = #table;
+      ran = {rem(h + i^2,len) : (h,k) in hk};
+      (flag,v) = unzip({(not(eql(k,nk)),v): 
+			(h,k) in hk; (fl,nk,v) in table->ran});
+      idx = pack_index(flag);
+  in v<-{(i,r): i in idx; r in search_internal(hk->idx,i+1,table)} $
+
+function make_table(type,maxsize) =
+   dist((f,identity(type)),3*maxsize-1) $
+
+function insert_table(key_value_pairs,table) =
+let len = #table;
+    hkv = {hash(key,len),key,value:  (key,value) in key_value_pairs}
+in insert_internal(hkv,0,table) $
+
+function create_table(key_value_pairs) =
+let 
+    len = 3 * #key_value_pairs - 1;
+    h = {hash(key,len):  (key,value) in key_value_pairs};
+    pos = insert_internal(h,0,dist(-1,len));
+    table = !len-put({t,k,v: (k,v) in key_value_pairs},pos,len)
+in table $
+
+function search_table(keys,table) =
+let len = #table;
+    hk = {hash(key,len),key:  key in keys}
+in search_internal(hk,0,table) $

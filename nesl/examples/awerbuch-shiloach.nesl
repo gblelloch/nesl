@@ -1,0 +1,72 @@
+% The Awerbuch-Shiloach algorithm for finding the connected components
+  of a graph.  See:
+    Baruch Awerbuch and Yossi Shiloach.  New Connectivity and MSF Algorithms 
+    for Ultracomputer and PRAM.  International Conference on Parallel 
+    Processing.  August 1983.  Pages 157--179.
+%
+
+function StarCheck(D) =
+  let 
+      % get pointer to grandparent %
+      G = D->D;
+      % is parent a self loop? %
+      ST = {D == G: D in D; G in G};
+      % if parent does not equal grandparent, put false flag in grandparent %
+      ST = ST <- {(G,F): D in D; G in G | G /= D}
+  % retrieve from grandparent %
+  in ST->G $
+
+% 
+Finds the connected components of a graph: all vertices in the same component
+will be labeled with the same number in the result sequence.
+  D -- for each vertex it points to its parent (initially points to self)
+  E1,E2 -- the two sides for each edge
+%
+function ConComp(D,E1,E2) =
+  let
+    % Conditional Hook -- when E1 points to the son of a root and
+                          the parent of E1 is greater than parent of E2 %
+    D = D <- {(Di,Dj) : Di in D->E1; Dj in D->E2; Gi in D->(D->E1)
+                      | (Gi==Di) and (Di>Dj)};
+    % Unconditional Hook -- when E1 points to a star and the parent
+                            of E1 does not equal the parent of E2 %
+    D = D <- {(Di,Dj) : Di in D->E1; Dj in D->E2
+                      ; ST in StarCheck(D)->E1
+                      | ST and (Di /= Dj)}
+  in 
+  if all(StarCheck(D)) 
+    % If done, return D %
+    then D
+    % If not, shortcut and repeat %   
+    else ConComp(D->D,E1,E2) $
+
+% An example graph (from JaJa, An Introduction to Parallel Algorithms).
+
+  8                     1    3
+   \                  / |    |
+    9 - 2 - 13 - 4 - 5  |    7
+   /    |             \ |   
+  12    11              6 - 10  
+%
+
+E1 = [1, 5, 1,  6, 4, 13,  2,  2, 9, 12, 8, 3] $
+E2 = [5, 6, 6, 10, 5,  4, 13, 11, 2,  9, 9, 7] $
+
+% This function adds in the dummy vertices and doubles up the edges for
+  each direction.
+  The input is a vector of the downsides of each edge (E1) 
+  and the upsides (E2) %
+function ConCompFull(E1,E2) =
+  let
+    % What is the number of vertices %
+    N = 1 + max(max_val(E1),max_val(E2));
+    % Create vertices and dummy vertices %
+    D = index(N) ++ index(N);
+    % Create edges in each direction %
+    NE1 = E1 ++ E2;    NE2 = E2 ++ E1
+    % Call connected components and remove the dummy vertices when done %
+  in take(ConComp(D,NE1,NE2),N) $
+
+% concompfull(e1,e2) should return:
+  [0, 1, 1, 3, 1, 1, 1, 3, 1, 1, 1, 1, 1, 1]
+%

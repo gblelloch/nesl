@@ -1,0 +1,153 @@
+% 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+This example code is for a geometric separator.  It uses a K-d tree to
+recursively separate a graph into parts such that the number of edges
+cut by the partitions is minimized.  It works on graphs embended in
+any k-dimensional space.  The algorithm needs to know the locations of
+the vertices of the graph in the space.  The file also supplies a demo
+for a 2-dimensional graph of an airfoil.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+%
+
+% ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; %
+%   SPLITTING A GRAPH             %
+% ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; %
+
+% Relabels the node numbers (starting at 0 within each partition) %
+function new_numbers(flags) =
+let down = enumerate({not(flags): flags});
+    up =   enumerate(flags);
+in {select(flags,up,down): flags; up; down} $
+
+function get_from_edges(edges,v) =
+  {(e1,e2) : e1 in v->{e1: (e1,e2) in edges} ; 
+             e2 in v->{e2: (e1,e2) in edges} } $
+
+%
+Takes a graph and splits it into two graphs.
+  side -- a flag for each point that marks on which side of partition it is on
+  points -- the coordinates of the points
+  edges -- the endpoints of each edge
+%
+function split_graph(side,points,edges) =
+let 
+    % Relabeling the node numbers (starting at 0 within each partition) %
+    new_n        = new_numbers(side);
+
+    % Edges updated to point to new node numbers %
+    new_edges    = get_from_edges(edges,new_n);
+    new_side      = get_from_edges(edges,side);
+
+    % Edges between nodes that are both on the left of the cut %
+    eleft        = pack(zip(new_edges, {not(s1 or s2) : (s1,s2) in new_side}));
+
+    % Edges between nodes that are both on the right of the cut %
+    eright       = pack(zip(new_edges, {s1 and s2 : (s1,s2) in new_side}));
+
+    % Back pointers to reconstruct original graph from partitions %
+    (sizes,sidx) = split_index(side)
+
+in (split(points,side),vpair(eleft,eright),sidx) $
+
+% ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; %
+%   SELECTING THE BEST CUT        %
+% ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; %
+
+% Checks how many edges are cut by a partition along the 
+  specified coordinates %
+function quad_check_cut(coordinates,edges) =
+let median = median(coordinates);
+    flags = {x > median : x in coordinates};
+    number = count({e1 xor e2 : (e1,e2) in get_from_edges(edges,flags)});
+in (number,flags) $
+
+% This returns the partition along one of the dimensions that minimizes
+  the number of edges that are cut %
+function find_best_cut(points,edges,dims_left) =
+let dim = dims_left-1;
+    (cut,flags) = quad_check_cut({p[dim]: p in points}, edges)
+in if (dim == 0) then
+     (cut,flags)
+   else 
+     let (cut_r,flags_r) = find_best_cut(points,edges,dims_left-1)
+     in if (cut_r < cut) then (cut_r,flags_r) else (cut,flags) $
+
+% ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; %
+%   THE RECURSIVE SEPARATOR       %
+% ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; %
+
+%
+  dimensions -- number of dimensions
+  depth -- depth in the recursion
+  count -- count along the current level of the recursion tree
+%
+function separator(dimensions,points,edges,depth,count) =
+if (depth == 0) then dist(count,#points)
+else
+  let (cuts,side) = find_best_cut(points,edges,dimensions);
+      str = "Level: "       ++ @depth ++
+            "  Partition: " ++ @count ++ 
+            "  Edges: "     ++ @(#edges) ++
+            "  Cuts: "      ++ @cuts ++ [newline];
+      line = print_string(str);
+      (snodes,sedges,sindex) = split_graph(side,points,edges);
+      result = {separator(dimensions,n,e,depth-1,c) :
+                n in snodes; e in sedges; c in vpair(count*2, 1+count*2)};
+  in flatten(result)->sindex $
+
+% ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; %
+%   READING AND DRAWING           %
+% ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; %
+
+function partition_by_n(a,n) = partition(a,dist(n, #a/n)) $
+
+function read_graph(graph,dimensions) =
+let flat_points = read_float_seq_from_file(graph ++ ".nodes");
+    flat_edges  = read_int_seq_from_file(graph ++ ".edges");
+    points      = partition_by_n(flat_points,dimensions);
+    edges       = {a[0],a[1] : a in partition_by_n(flat_edges,2)}
+in (points,edges) $
+
+function draw_graph(points,edges) =
+let 
+    edges,edge_part = unzip(edges);
+    window = w_make_window(((200,100),(600,600)),  % Window position and size %
+			   "separator graph",      % Window title %
+			   w_black,                % Background color %
+			   display);               % Default display %
+    bound_box = w_bounding_box(points);
+    window,box = w_add_box(((50,50),(500,500)),% offset,size within window %
+			   bound_box,          % offset,size of virtual coords%
+			   "graph box",        % box title %
+			   w_white,            % box color %
+			   window);            % window %
+
+    % The following colors the edges in each of the partitions a
+      different color %
+    edge_ends = get_from_edges(edges,points);
+    foo = int_collect(zip(edge_part,edge_ends));
+    foo = {w_draw_segments(es,1,rand(i),box): _,es in foo; i in dist(60,#foo)};
+
+    _ = w_add_text((250,20),"Click on window to remove",w_white,window);
+    _ = w_get_input(window);  % wait for an event %
+in w_kill_window(window)$
+
+% ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; %
+%   SEPARATOR DEMO                %
+% ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; %
+
+% You can pass this anything as an argument %
+function separator_demo( _ ) =
+let 
+    depth = 4;
+    dimensions = 2;
+    graph_files =    nesl_path ++ "examples/airfoil";
+    (points,edges) = read_graph(graph_files,dimensions);
+    part =           separator(dimensions,points,edges,depth,0);
+    internal_edges = {e,e1
+		      :e in edges
+		      ; (e1,e2) in get_from_edges(edges,part) 
+		      | e1==e2};
+    graph =          draw_graph({(a[0],a[1]): a in points}, 
+				    internal_edges);
+in #internal_edges $

@@ -1,0 +1,16 @@
+function list_rank(p,v) =
+  if #p == 1 then [0]
+  else 
+    let 
+      flip  = {zerop(rand(j)): j in dist(2,#p)};
+      keep  = {not(flip and not(next_flip)): 
+	       flip; 
+	       next_flip in flip->p};
+      next  = zip3(keep,p,v)->p;
+      ndrop = {not(nkeep): (nkeep, np, nv) in next};
+      new_p = {select(nkeep, p, np): p; (nkeep, np, nv) in next};
+      new_v = {select(nkeep, v, v+nv): v; (nkeep, np, nv) in next};
+      new_i = enumerate(keep)->new_p;
+      idx   = pack_index(keep);
+      up_v  = v<-zip(idx,list_rank(new_i->idx,new_v->idx));
+    in cond_put({up_v+v: up_v; v},p,ndrop,up_v) $

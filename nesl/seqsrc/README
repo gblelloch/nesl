@@ -1,0 +1,33 @@
+This is a pure Common Lisp version of NESL that does not need the
+VCODE interpreter and runs stand alone on most versions of Common
+Lisp.  This version is interpreted so it is quite slow for large problems,
+but serves as an good testbed for experimenting with NESL.
+
+To load NESL start up common lisp and type:
+  (load "load.lisp")
+Then to start NESL, type
+  (nesl)
+
+This is currently a BETA version and not all the NESL features have
+been implemented yet.  Features that are not included are:
+
+  1) The graphics routines
+  2) tracing facilities
+  3) profiling facilities
+  4) the spawn function
+
+In this sequential version, top level expressions and function definitions 
+are translated to lisp, compiled using the common lisp compiler, and then
+executed. A NESL file can be loaded, translated to lisp and compiled into
+an object file. Subsequent loads of the file will simply load the
+object file and hence will be significantly faster. This load command is 
+called "obj_load". The normal "load" command will retranslate and recompile 
+the NESL code each time the file is loaded.
+
+
+This version has been tested on Allegro common lisp, CMU common lisp and gcl,
+and most extensively on Allegro. It is expected to run on Kyoto and Lucid 
+common lisps, and on clisp. Although we have done a reasonable job testing it,
+it is likely not to be as robust as the VCODE version. 
+
+

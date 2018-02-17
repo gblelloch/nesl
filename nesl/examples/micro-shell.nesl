@@ -1,0 +1,37 @@
+% This file implements a trivial shell that keeps track of the current 
+  working directory and executes shell commands by invoking csh. 
+  It cannot handle any input from stdin. %
+
+% Run command in a specified directory, return stdout as a string. 
+  The directory name must end with a newline. %
+function shell_com(command,directory) =
+let com = "cd "++ directory ++ command ++ [newline];
+in shell_command("csh",com) $
+
+% Recursive loop that executes shell lines. %
+function next_shell(working_dir) =
+let 
+    command = prompt("% ");   % reads a command line from the user %
+    words = wordify(command)  % breaks command into words, sep. by spaces %
+in
+    if (#command == 0) then t             % exit %
+    else if eql(words[0],"exit") then t   % exit %
+    else if eql(words[0],"cd")
+    then 
+	% Does the cd in the working directory and then does 
+	  a pwd to get the new directory. %
+	let next_dir = shell_com(command ++ ";pwd", working_dir);
+	in next_shell(if zerop(#next_dir) then working_dir else next_dir)
+    else 
+	let 
+	    % If the command is an ls, adds the -C flag. %
+	    com = if eql(words[0],"ls")
+	          then "ls -C " ++ flatten(drop(words,1))
+	          else command;
+	    % Execute command and print stdout. %
+	    foo = print_string(shell_com(com, working_dir))
+	% Repeat loop in the same directory. %
+	in next_shell(working_dir) $
+
+% Starts the shell in the current directory %
+function micro_shell(ignore) = next_shell(shell_command("pwd","")) $

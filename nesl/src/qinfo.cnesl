@@ -1,0 +1,10 @@
+function qinfo(qname) = 
+let 
+    a = shell_command("rsh -K -l blelloch cmsuna.psc.edu /usr/local/bin/qstat"
+		      ,"");
+    lines = linify(first(a));
+    b = find(qname ++ "@cmsuna.psc.edu:",lines)
+in 
+    if plusp(b) then
+	flatten({l ++ [newline]: l in subseq(lines,b,b+7)})
+    else "" $

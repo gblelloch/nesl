@@ -1,0 +1,119 @@
+%
+This example finds the convex hull in 2 dimensions for a set of points.
+The algorithm is described in the NESL language definition.
+This file also includes a function, hull_demo(n), that picks approximately
+n random points in a circle, plots the points, finds the hull, and plots
+the hull.
+
+All routines return the hull in clockwise order from the point with
+minimum x value.
+%
+
+function cross_product(o,line) =
+let (xo,yo) = o; 
+    ((x1,y1),(x2,y2)) = line;
+in (x1-xo)*(y2-yo) - (y1-yo)*(x2-xo);
+
+epsilon = 1e-10;
+
+function m_cross_product(points,line) =
+let
+    ((x1,y1),(x2,y2)) = line;
+    deter = x1*y2 - x2*y1;
+    a = y1 - y2;
+    b = x2 - x1;
+in deter,{a*x + b*y : (x,y) in points} $
+
+function hsplit2(points,p1,p2) =
+let 
+    deter,cross = m_cross_product(points,(p1,p2));
+    threshold = -deter + abs(deter)*epsilon;
+    packed = {p in points; c in cross | c > threshold};
+in if (#packed < 2) then [p1] ++ packed
+   else
+     let pm = points[max_index(cross)];
+     in flatten({hsplit2(packed,p1,p2): p1 in [p1,pm]; p2 in [pm,p2]}) $
+
+function convex_hull2(points) =
+let x = {x : (x,y) in points};
+    minx = points[min_index(x)];
+    maxx = points[max_index(x)];
+in hsplit2(points,minx,maxx) ++ hsplit2(points,maxx,minx) $
+
+function convex_hull3(points) =
+let x = {x : (x,y) in points};
+    minx = points[min_index(x)];
+    maxx = points[max_index(x)];
+    deter,cross = m_cross_product(points,minx,maxx);
+    threshold = -deter + abs(deter)*epsilon;
+    (x1,y1) = points[max_index(cross)];
+    l_up_points = {(x,y) in points; c in cross | c > threshold and x < x1};
+    r_up_points = {(x,y) in points; c in cross | c > threshold and x > x1};
+    threshold = -deter - abs(deter)*epsilon;
+    (x2,y2) = points[min_index(cross)];
+    r_down_points = {(x,y) in points; c in cross | c < threshold and x > x2};
+    l_down_points = {(x,y) in points; c in cross | c < threshold and x < x2};
+in hsplit2(l_up_points,minx,(x1,y1)) ++ hsplit2(r_up_points,(x1,y1),maxx) ++ 
+   hsplit2(r_down_points,maxx,(x2,y2)) ++ hsplit2(l_down_points,(x2,y2),minx) $
+
+function lower_hull(points) =
+let xs,ys = unzip(points);
+    minx = points[min_index(xs)];
+    maxx = points[max_index(xs)];
+    miny = points[min_index(ys)];
+    (x1,y1) = miny;
+    pts0 = {(x,y) in points | x > x1};
+    pts1 = {(x,y) in points | x < x1};
+in hsplit2(pts0,maxx,miny) ++ hsplit2(pts1,miny,minx) $
+
+function almost_median(a) = median(a->{rand(i) : i in dist(#a,isqrt(#a))})$
+
+function testtime(points) =
+if #points < 100 then t
+else let
+    points = {y,x : x,y in points};
+    med = almost_median({x : x,y in points});
+    (xm,ym) = {x,y in points | x == med}[0];
+    proj = {x,x^2+y^2: x,y in points};
+    foo = lower_hull(proj);
+    bar = split(points,{x < med: x,y in points });
+in any({testtime(x) : x in bar}) $
+
+function hsplit(points,p1,p2) =
+let cross = {cross_product(p,(p1,p2)): p in points};
+    packed = {p in points; c in cross | plusp(c)};
+in if (#packed < 2) then [p1] ++ packed
+   else
+     let pm = points[max_index(cross)];
+     in flatten({hsplit(packed,p1,p2): p1 in [p1,pm]; p2 in [pm,p2]}) $
+
+function convex_hull(points) =
+let x = {x : (x,y) in points};
+    minx = points[min_index(x)];
+    maxx = points[max_index(x)];
+in hsplit(points,minx,maxx) ++ hsplit(points,maxx,minx) $
+
+function random_points(n) =
+let m = round(float(n)*4.0/pi);
+    points = {rand(i) - 1.0, rand(i) - 1.0: i in dist(2.0,m)};
+in {x,y in points | x^2 + y^2 < 1.0} ;
+
+function rand_points_project(n) =
+let 
+    points = {rand(i) - 1.0, rand(i) - 1.0: i in dist(2.0,n)};
+in {x,x^2+y^2: x,y in points} $
+
+function check(n) =
+let
+    points = random_points(n);
+in #convex_hull(points),#convex_hull2(points),#convex_hull3(points) $
+
+function hull_demo(n) =
+let points = random_points(n);
+    ignore = if (#points < 2) then error("Not enough points.") else f;
+    box =    bounding_box([(-1.0,-1.0),(1.0,1.0)]);
+    window = make_window(((200,100),(600,600)),box,"convex hull",display);
+    ignore = draw_points(points,window);
+    hull =   convex_hull(points);
+    ignore = draw_lines(hull ++ take(hull,1),1,window);
+in close_window(window);

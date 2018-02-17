@@ -1,0 +1,743 @@
+
+%
+DESCRIPTION:
+
+  point --- (float,float,int)
+  points --- v.point
+  num_boundary --- int
+  boundary_pairs --- v.v.(point,point) of size num_boundary
+
+
+1) pick a point P and a line L containing P.
+2) project the points onto the parabola centered at P and then on to
+   the plane PLANE which goes through L.    
+3) find the lower convex hull of the points on PLANE, q_1,...,q_k. 
+%
+
+
+
+
+%
+DESCRIPTION: cone_test
+  
+  INPUT: (point, point, (point,point)) (q, p, (a,b))
+  OUTPUT: true if the point q is in or on the boundary of the left
+                  cone determined by the path a-p-b
+          false otherwise   
+%
+GRAPH_BOX = 0;
+ZOOM_BOX  = 1;
+
+COLOR=3;
+function packz(v,fl) = pack(zip(v,fl)) $
+function zsplit(v,fl) = let a=split(v,fl) in a[0],a[1]$
+%function debug(string) = print_line(string) $%
+function debug(string) = t $
+function warning(string) = print_line(string) $
+function ntags(nodes) = { tag : (tag,node) in nodes} $
+function etags(border) = {(tag,{ (tg1,tg2,tg3): ((tg1,n1),(tg2,n2),(tg3,n3)) in edges}) :(tag,edges) in border}$
+
+function substringp(a,b) =
+  if (#a > #b) then f
+  else string_eql(a,take(b,#a)) $
+function unzip4(v ) = let 
+                      a,b = unzip(v);
+                      b,c = unzip(b);
+                      c,d = unzip(c);
+in a,b,c,d $
+function unzip5(v ) = let 
+                      a,b = unzip(v);
+                      b,c = unzip(b);
+                      c,d = unzip(c);
+                      d,e = unzip(d);
+in a,b,c,d,e $
+function unzip6(v ) = let
+                      a,b = unzip(v);
+                      b,c = unzip(b);
+                      c,d = unzip(c);
+                      d,e = unzip(d);
+                      e,f1 = unzip(e);
+in a,b,c,d,e,f1 $
+
+   
+  
+
+%<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+   Functions used to compute the 2D convex hull:
+   Parabula projection: elevate 2d points to a paraboloid above plane,
+                      and project onto a vertical plane
+   Lower_hull: compute lower hull of tagged points in plane
+   hull: compute  hull of tagged points in plane
+   hsplit : internal to [lower]-hull.
+   lower-2d-hull: points in plane -> parabula projection-> return division
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>%
+
+epsilon = 1e-12;
+function dot_product((p,q),(x,y)) = p*x+q*y $ 
+function line_product((tag,point),(normal,value)) = dot_product(point,normal)-value $
+function cross_product(o,line) =
+let (xo,yo) = o;
+    ((x1,y1),(x2,y2)) = line;
+in (x1-xo)*(y2-yo) - (y1-yo)*(x2-xo);
+function distance2((a,b),(c,d)) = (a-c)^2+(b-d)^2 $
+function size(a,b) = sqrt(distance2(a,b)) $
+
+function center((x1,y1),(x2,y2),(x3,y3)) =
+let
+  % project points to parabula %
+  z1,z2,z3 = x1^2+y1^2,x2^2+y2^2,x3^2+y3^2;
+  (x1,y1,z1) = x1-x3,y1-y3,z1-z3;
+  (x2,y2,z2) = x2-x3,y2-y3,z2-z3;
+
+  % compute normal to plane %
+  nx,ny,nz = Y1*Z2 - Z1*Y2,X2*Z1 - Z2*X1,Y2*X1 - X2*Y1;
+in
+  if nz /= 0.0 then let 
+              nz = -0.5/nz;
+     in nx*nz,ny*nz
+  % return anything %
+  else nx,ny $
+
+
+
+% we assume that noraml is a unit vector 
+%
+function parabola_projection(points, P, normal)=
+let  (px,py) = P;
+     (a,b) = normal;
+     points = { x-px,y-py : x,y in points};
+     z_values = {(x)^2+(y)^2 : (x,y) in points};
+     x_values = { -y*a+x*b : (x,y) in points};
+     y_values = { x*a+y*b : (x,y) in points};
+in  { x_values,z_values,y_values : x_values;y_values;z_values} $
+
+function sort_line((tag1,(x0,y0,z0)),(tag2,(x1,y1,z1)),packed) = 
+let
+   flags = if abs(x0-x1) < epsilon then let
+             z0,z1 =  min(z0,z1),max(z0,z1);
+           in { z>= z0 and z <= z1 :  (tag,(x,y,z) ) in packed}
+        else { z > -epsilon : (tag,(x,y,z)) in packed };
+   packed = packz(packed,flags);
+   x0,y0 = x1-x0,y1-y0;
+   vals = { x*x0+y*y0 : (tag,(x,y,z) ) in packed};
+in
+if #packed<=1 then packed else
+let
+   ind = rank(vals);
+   %XX = print_line("Ind "++@ind++" Packed "++@packed++" Vals "++@vals);%
+in
+  permute(packed,ind) $
+
+
+%-------------------------------------------------%
+% This function picks the nodes whose distance is
+  maximal, and among those nodes returns the node
+  with a maximal z. the dirz, dird control if we 
+  use the rule "maximal" or "minimal"             %
+%-------------------------------------------------%
+function minmax_pick(nodes,z,dirz,distance,dird) =
+let
+   val = if dird then min_val(distance) else max_val(distance);
+   ind = index(#distance);
+   ind1 = { ind : ind; d in distance | abs(d-val) < epsilon }; 
+   zval = z->ind1;
+   j = if dirz then max_index(zval) else min_index(zval);
+   nj = ind1[j];
+in
+   nodes[nj], packz(nodes,{ ind/=nj : ind}) $
+
+function hsplit(nodes,p1,p2) =
+let 
+    (tag1,(x,y,z)),(tag2,(a,b,c)) = p1,p2;
+    p,q = (x,y),(a,b);
+    size = sqrt(distance2(p,q));
+    cross = {cross_product((a,b),(p,q))/size: (tag,(a,b,c)) in nodes};
+    flags = { c <= epsilon and tag/= tag1 and tag /= tag2: (tag,(a,b,d))  in nodes; c in cross};
+    packed = packz(nodes,flags);
+    cross = packz(cross,flags);
+in
+  if #packed==0 then [p1]
+  else if abs(min_val(cross)) <= epsilon then [p1]++sort_line(p1,p2,packed)
+  else let
+      z = { z : (tag,(a,b,z)) in packed };
+      pm,packed = minmax_pick(packed,z,t,cross,t);
+in flatten({hsplit(packed,p1,p2): p1 in [p1,pm]; p2 in [pm,p2]})$
+  
+function find_low_end_point(val,nodes,dir) =
+let
+   flags = { abs(x-val) < epsilon : (tag,(x,y,z)) in nodes };
+   nodes1 = split(nodes,flags);
+   nodes,nodes1 = nodes1[0],nodes1[1];
+   miny = min_val({ y :  (tag,(x,y,z)) in nodes1});
+   flags = { abs(y-miny) < epsilon : (tag,(x,y,z)) in nodes1 };
+   nodes1 = packz(nodes1,flags);
+   end_point = nodes1[max_index({ z*dir :  (tag,(x,y,z)) in nodes1})];
+in
+   end_point,nodes $
+
+function lower_hull(nodes)=
+let
+   % check for linear termination condition %
+   x ={ x:  (tag,(x,y,z)) in nodes};
+   (tag1,(x,y,z)),(tag2,(a,b,c)) = nodes[min_index(x)],nodes[max_index(x)];
+   p,q = (x,y),(a,b);
+   size = sqrt(distance2(p,q));
+   cross = {cross_product((a,b),(p,q))/size: (tag,(a,b,c)) in nodes};
+   linear = max_val({ abs(cross) : cross}) < epsilon;
+in
+if linear then nodes,linear
+else let 
+    x,y = unzip({x,y : (tag,(x,y,z)) in nodes});
+    minx,nodes = find_low_end_point(min_val(x),nodes,1.0);
+    x,y = unzip({x,y : (tag,(x,y,z)) in nodes});
+    maxx,nodes = find_low_end_point(max_val(x),nodes,1.0);
+in hsplit(nodes,minx,maxx)++[maxx],linear $
+
+function hull0(nodes)=
+let
+    x = {x : (tag,(x,y,z)) in nodes};
+    minx = nodes[min_index(x)];
+    maxx = nodes[max_index(x)];
+    res1 =  hsplit(nodes,minx,maxx);
+    res2 =  hsplit(nodes,maxx,minx);
+in res1++res2++[minx]$
+
+function hull(nodes) =
+let
+ inds,resti = unzip( hull0({ (i,(x,y,1.0)) : (tag,(x,y)) in nodes; i in index(#nodes) }));
+in
+  nodes->inds $
+
+
+     
+function lower_2d_hull((point,normal),nodes) =
+let
+  (tags,points) = unzip(nodes);
+  points = parabola_projection(points,point,normal);
+  res,linear_flag = lower_hull(zip(index(#points),points));
+  inds,points = unzip(res);
+in
+  nodes->inds,linear_flag $
+
+
+%<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+Input: Old_border    
+       New_Border
+Output: Border_Left, Border_Right
+
+Data_types:
+ Node is of form ( Node_tag,(x,y) ): (int,(float,float))
+ Old_border = [ (middle_node_tag, [(first_node,middle_node,last_node)]) ];
+ New_Border = [ Node ];
+ New_Border_{Left/Right}: Same type as Old_Border 
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>%
+
+% constants %
+
+   
+function cone_test(q,(a,m,b))=
+let (tagq,q),(taga,a),(tagm,m),(tagb,b) = q,a,m,b;
+    line1 = (a,m);
+    size1 = distance2((a,m));
+    line2 = (m,b);
+    size2 = distance2((m,b));
+    convex = cross_product(b,line1) >=0.0;
+    pline1 = cross_product(q,line1) > 0.0 or size1==0.0;
+    pline2 = cross_product(q,line2) > 0.0 or size2==0.0;
+    ptag = tagq==taga or tagq==tagb;
+in  
+  ptag or (if convex then pline1 and pline2 else pline1 or pline2)$
+
+
+function merge_border1(mnode,old,new,LorRflag) =
+let
+  oldr = {(i,j,f):(i,r1),(j,r2) in old};
+  emptyb = [](int,int);
+in
+if #new==0 then if LorRflag then (oldr,[](int,int,bool)) else ( [](int,int,bool),oldr)
+else let
+      emptyb = [](int,int);
+      (mtag,m) = mnode;
+      (an,bn) = new[0];
+      ((atag,a),(btag,b)) = an,bn;
+      taga,tagb = atag /= mtag, btag/=mtag;
+      Anf = { cone_test(an,(a,mnode,b)) and taga: (a,b) in old};
+      Bnf = { cone_test(bn,(a,mnode,b)) and tagb : (a,b) in old};
+      tagai = { tagai : ( (tagai,ai),bi) in old };
+      Aif = { cone_test(ai,(an,mnode,bn)) and atag/= tagai : (ai,bi) in old;tagai};
+      ledges,redges = unzip({ if Anf xor Bnf  then
+                     if Bnf then
+                         ([(ai,btag)],[(btag,bi)])
+                     else [(atag,bi)],[(ai,atag)]
+                  else if Anf and Bnf then
+                             if Aif then [(atag,bi),(ai,btag)],[(btag,atag)]
+                             else [(atag,btag)],[(btag,bi),(ai,atag)]
+                       else if Aif then [(ai,bi)],emptyb else emptyb,[(ai,bi)] :
+                                    ((ai,at),(bi,bt)) in old;anf;bnf;aif });
+
+      ledges = { (tag1,tag2,t) : (tag1,tag2) in flatten(ledges) | tag1/=tag2};
+      redges = { (tag1,tag2,t) : (tag1,tag2) in flatten(redges) | tag1/=tag2};
+in
+    (ledges,redges) $
+
+      
+
+
+function border_split(obnodes,obedges,nbnodes,line) = 
+let
+   n = #obnodes;
+   m = #nbnodes;
+   nbedges = { [(b,a)] : b in nbnodes->[0]++nbnodes->[0:m-1];
+                            a in  nbnodes->[1:m]++nbnodes->[m-1] };
+   flags = { tag < n : (tag,xy) in nbnodes };
+   nbnodes0,nbnodes1 = zsplit(nbnodes,flags);
+   nbedges0,nbedges1 = zsplit(nbedges,flags);
+   nbedges0L = { { (i,j,t) : (i,a),(j,b) in edges}: edges in nbedges0};
+   nbedges0R = { { (j,i,fl) : (i,j,fl) in edges}: edges in nbedges0L};
+
+   ostruct = { #edges: edges in obedges };
+   i,j = unzip(flatten(obedges));
+   obedges = partition( zip(obnodes->i,obnodes->j),ostruct);
+
+   nbedges = dist([]((int,(float,float)),(int,(float,float))),n);
+   tags,ignore = unzip(nbnodes1);
+   nbedges = nbedges <- zip(tags,nbedges1);
+   LorRflag = {line_product(m,line) > 0.0: m in obnodes};
+   ledges,redges = unzip({ merge_border1(mnode,oldb,newb,LorRflag): 
+         mnode in obnodes; oldb in obedges; newb in nbedges;LorRflag});
+   ledgesf,redgesf = { #ledges > 0 : ledges}, {#redges > 0 : redges };
+   nodesl,nodesr = packz(obnodes,ledgesf)++nbnodes0,packz(obnodes,redgesf)++nbnodes0;
+   ledges,redges = packz(ledges,ledgesf)++nbedges0L,packz(redges,redgesf)++nbedges0R;
+in
+   (nodesl,ledges),(nodesr,redges) $
+%OTHER OPTION OF DOING THE SAME THING
+
+   nodes = [packz(obnodes,ledgesf)++nbnodes0,packz(obnodes,redgesf)++nbnodes0];
+   edges = [packz(ledges,ledgesf)++nbedges0L,packz(redges,redgesf)++nbedges0R];
+in
+   nodes, edges $
+%
+
+   
+function pick_border_median(bnodes,bedges) =
+let 
+   border = flatten(bedges);
+   (tagi,tagj) = border[rand(#border)];
+   ig,(x1,y1) = bnodes[tagi];
+   ig,(x2,y2) = bnodes[tagj];
+   point = ((0.5)*(x1+x2),(0.5)*(y1+y2));
+   nx,ny = x1-x2,y1-y2;
+   dir = rand(2);
+   dir = if dir==0 then -1.0 else 1.0;
+   normal = dir*sqrt((nx^2+ny^2));
+   nx,ny = if normal /= 0.0 then (nx/normal,ny/normal) else (1.0,0.0);
+in
+  point,(nx,ny)$
+
+
+function pick_internal_median(nodes,bnodes,XorY) =
+let
+  (tags,points) = unzip(nodes);
+  (tagsb,bpoints) = unzip(bnodes);
+  (x,y) = unzip(points);
+  (xb,yb) = unzip(bpoints);
+  %XorY = rand(2)== 0;%
+in
+  if XorY then let
+               med = median(x++xb);
+               i = min_index({ abs(x-med) : x });
+               normal =  (-1.0,0.0) ;
+           in  points[i],normal
+   else let
+               med = median(y++yb);
+               i = min_index({ abs(y-med) : y});
+               normal =  (0.0,-1.0) ;
+           in  points[i],normal $
+
+
+function pick_median(nodes,bnodes,bedges,XorY) = 
+if #nodes==0 then  pick_border_median(bnodes,bedges)
+else pick_internal_median(nodes,bnodes,XorY) $
+
+
+function remove_duplicate_border(nodes,border_nodes,n) =
+let
+   ntags,ignore = unzip(nodes);
+   btags,ignore = unzip(border_nodes);
+   retain = dist(t,n)<-zip(btags,dist(f,#btags));
+in
+   packz(nodes,retain->ntags) $
+
+
+% assume border nodes are numberd 0..n-1 and internal nodes n..m %
+
+function rename_border(bedges,new_name) =
+if #bedges==0 then bedges
+else let
+  border_struct = {#bedges : bedges};
+  i,j = unzip(flatten(bedges));
+in
+   partition(zip(new_name->i,new_name->j),border_struct)$
+
+function rename(nodes,bnodes,bedges) =
+if #bnodes==0 then nodes,bnodes,bedges,[]int
+else let
+   node_tags,points = unzip(nodes);
+   border_tags,bpoints = unzip(bnodes);
+   m = max(max_val(node_tags),max_val(border_tags));
+   n = #bnodes;
+   new_name = index(m+1) <- zip(border_tags,index(n));
+   l = [n:n+#nodes];
+   new_name = new_name<- zip(node_tags,l);
+   nodes = zip(l,points);
+   nbnodes = zip(index(n),bpoints);
+   back_name = border_tags++node_tags;
+   bedges = rename_border(bedges,new_name);
+ %   XX = print_line("back name "++@back_name);%
+in
+   nodes,nbnodes,bedges,back_name $
+   
+
+function no_duplicate_nodes(border) =
+let
+   b,xy = unzip(border);
+   n = #border;
+   i = int_collect({ (b,i) : b ; i in index(n)});
+   i = { (min_val(b),max_val(b)) : (a,b) in i };
+   fls = dist(t,n) <-flatten({ zip([a:b],dist(f,b-a)): (a,b) in i}) ;
+   %change = count(fls) < #border;
+   XX = if change then warning("Node appears twice on border") else t;%
+in
+  packz(border,fls) $
+
+function get_from(nodes,bnodes,bedges) =
+let
+  tags,ps = unzip(nodes);
+  struct = {#bedges:bedges};
+  m = flatten({ dist(p,i) : (tag,p) in bnodes; i in struct});
+  i,j = unzip(flatten(bedges));
+  e = flatten({ [(i,m),(m,j)] : i in ps->i; j in ps->j; m});
+in
+  e $
+function get_from1(nodes,bnodes,bedges) =
+let
+  tags,ps = unzip(nodes);
+  struct = {#bedges:bedges};
+  m = flatten({ dist(p,i) : (tag,p) in bnodes; i in struct});
+  i,j = unzip(flatten(bedges));
+  j,  flags = unzip(j);
+  e = flatten({ [(i,m,flags),(m,j,flags)] : flags; i in ps->i; j in ps->j; m});
+  fl = { k : (i,j,k) in e};
+  e = { i,j : (i,j,k) in e};
+in
+  packz(e,fl) $
+
+function get_edges(nborder)=
+let
+  i,p = unzip(nborder);
+  n = #p;
+  e = zip(p->[0:n-1],p->[1:n]);
+in e$
+
+function DT_( nodes,bnodes,bedges) =
+let 
+   keep_nodes = bnodes++nodes;
+   %       compute new left and right border %
+   direction = rand(2)==0;
+   line = pick_median(nodes,bnodes,bedges,direction);
+   new_border,linear_flag = lower_2d_hull(line,nodes++bnodes);
+   new_border = no_duplicate_nodes(new_border);
+   send_back = (line,new_border);
+in
+if linear_flag then [nodes],[bnodes],[bedges],linear_flag,[]((float,float),(float,float)),send_back
+else let
+   (point,normal) = line;
+   line1 = ( normal,dot_product(line));
+% OTHER OPTION
+   nbnodes,nbedges = border_split(bnodes,bedges,new_border,line1);%
+   (bnodes_left,bedges_left),(bnodes_right,bedges_right)
+         = border_split(bnodes,bedges,new_border,line1);
+
+   bedges_left1 = bedges_left;
+   bedges_right1 = bedges_right;
+   bedges_left = { { (i,j) : (i,j,k) in e}: e in bedges_left};
+   bedges_right = { { (i,j) : (i,j,k) in e}: e in bedges_right};
+   
+
+   % remove border nodes from cur nodes so we dont duplicate too much %
+   % and then split nodes left and right %
+   n = #nodes+#bnodes;
+   nodes = remove_duplicate_border(nodes,new_border,n);
+   LorR = split(nodes,{ line_product(nodes,line1) < 0.0 :  nodes });
+
+in
+% OTHER OPTION 
+   LorR,nbnodes,nbedges,linear_flag,#new_border$%
+LorR,[bnodes_left,bnodes_right],[bedges_left,bedges_right],linear_flag, get_from1(keep_nodes,
+bnodes_left++bnodes_right,bedges_left1++bedges_right1),send_back $
+% LorR,[bnodes_left,bnodes_right],[bedges_left,bedges_right],linear_flag, get_edges(new_border)$%
+
+
+function bmerge(i) =
+let
+  a,b,c,i = unzip4(i);
+  a = sum(a);
+  b = sum(b);
+  c = sum(c);
+  i = max_val(i);
+in
+   a,b,c,i $
+ 
+
+function dt_step(state) =
+let
+  NO_edges= []((float,float),(float,float));
+  (nodes,bnodes,bedges,old_display_edges) = state;
+  keep_points = flatten(nodes);
+  bnodes1 = bnodes++nodes;
+   % all those that are done should be packed away%
+   done_flags = { #bnodes<=3 and #nodes==0 : bnodes;nodes};
+   nodes,done_nodes = zsplit(nodes,done_flags);
+   bnodes,done_bnodes = zsplit(bnodes,done_flags);
+   bedges,done_bedges = zsplit(bedges,done_flags);
+in
+if #nodes==0 then (nodes,bnodes,bedges,old_display_edges++[NO_edges]),t
+else let
+   nnodes,nbnodes,nbedges,linear_flags,display_edges,line =
+   unzip6({ DT_(nodes,bnodes,bedges): nodes;bnodes;bedges});
+   display_edges = flatten(display_edges);
+   nnodes,done_nnodes = zsplit(nnodes,linear_flags);
+   nbnodes,done_nbnodes = zsplit(nbnodes,linear_flags);
+   nbedges,done_nbedges = zsplit(nbedges,linear_flags);
+   nnodes = flatten(nnodes);
+   nbnodes = flatten(nbnodes);
+   nbedges = flatten(nbedges);
+in
+if #nnodes==0 then (nnodes,nbnodes,nbedges,old_display_edges++[display_edges]),t
+else let
+      nnodes,nbnodes,nbedges,bname =
+        unzip4({ rename(nnodes,nbnodes,nbedges) :nnodes; nbedges;nbnodes });
+    in
+       (nnodes,nbnodes,nbedges,old_display_edges++[display_edges]),f $
+
+
+
+ 
+      
+function init_dt_state(points) =
+let 
+   n = #points;
+   nodes = zip(index(n),points);
+   border = hull(nodes);
+   nodes = remove_duplicate_border(nodes,border,n);
+   n = #border;
+   border_nodes = { (tag,xy) in border->[1:n] };
+   border_edges = { [(before_tag,after_tag)] :
+       (before_tag,b) in border->[0:n-1];
+      (after_tag,a) in border->[2:n] ++ border->[1] };
+   nodes,border_nodes,border_edges,rename_back =
+       rename(nodes,border_nodes,border_edges);
+   display_edges = get_from(border_nodes++nodes,border_nodes,border_edges);
+
+   state = [nodes],[border_nodes],[border_edges],[display_edges];
+in
+   state $
+
+
+function uniform_normalize(xy) =
+let
+   x,y = unzip(xy);
+   minx = min_val(x);
+   maxx = max_val(x);
+   miny = min_val(y);
+   maxy = max_val(y);
+   interval = max(maxx-minx,maxy-miny);
+   x = { (x-minx)/interval : x};
+   y = { (y-miny)/interval : y};
+in
+  zip(x,y) $
+
+
+function line_test(N) =
+let
+     v = dist(1.0,N);
+     x = { 1.0/rand(i) : i in v};
+     vv = max_val(x);
+     x = { (x-1.0)/(vv-1.) : x};
+     y = {rand(i) : i in v};
+in zip(x,y) $
+
+function uniform_test(N) =
+let
+     v = dist(1.0,N);
+     x = { rand(i) : i in v};
+     y = {rand(i) : i in v};
+in zip(x,y) $
+
+
+function diagonal_test(N) =
+let
+ N = N/4;
+ ind = { float(i)+1.0 : i in index(N) };
+ ep = 1.0;
+ u = dist(2.0*ep,N);
+ v = dist(2.0*ep,N);
+ xy = { ind+rand(v)-ep,ind+rand(u)-ep : ind;u;v }
+        ++{ ind+rand(v)-ep,-ind+rand(u) -ep : ind;u;v}
+       ++ { -ind+rand(v)-ep,ind+rand(u)-ep:ind;u;v}
+       ++{-ind+rand(v)-ep,-ind+rand(u)-ep:ind;u;v};
+in
+     uniform_normalize(xy) $
+
+function pickshell (rad,n) =
+
+let
+        m = round(2.0*float(n)*4.0/pi);
+        v = {(rand(i)-1.0,rand(i)-1.0) : i in dist(2.0,m)};
+        filter = (take({x,y in v | x^2 + y^2 < 1.0},n)) ;
+in
+        { (x*r/sqrt(x^2 + y^2)),(y*r/sqrt(x^2 + y^2)) : (x,y) in filter;r in rad
+} $
+
+function generate_point(n) =
+let
+        rsc = 3.14159265358979 * 3.0 / 16.0;
+        vsc = sqrt(1.0/rsc);
+        mass = 1.0/float(n);
+        rand_pts = {rand(i): i in dist(1.0,2*n)};
+        good_rands = take({x : x in rand_pts | x /= 0.0},n);
+        rad = {1.0 / sqrt(expt(rnd,-2.0/3.0) - 1.0) : rnd in good_rands};
+        pos_vecs = pickshell(rad,n);
+        vel = {sqrt(2.0) / expt(1.0+r*r, 0.25) :  r in rad};
+        vel_vec = pickshell({vsc * v : v in vel},n);
+in
+        {[x,y,vx,vy,mass]: (x,y) in pos_vecs; (vx,vy) in vel_vec} $
+
+function normalize(particles,n) =
+
+let
+        cmr = {sum({p[i]: p in particles}) : i in [0,1]};
+        cmv = {sum({p[i]: p in particles}) : i in [2,3]};
+        norm_cmr = {rad/float(n) : rad in cmr};
+        norm_cmv = {vel/float(n) : vel in cmv};
+in
+        {[p[0]-norm_cmr[0], p[1]-norm_cmr[1],p[2]-norm_cmv[0], p[3]-norm_cmv[1],
+p[4]] : p in particles} $
+
+function plummer_test(n) = let
+ xy =  normalize(generate_point(n),n) ;
+ xy = { x[0],x[1] : x in xy };
+in
+  uniform_normalize(xy) $
+
+function dt_get_number_of_points(win,boxes) = 1000$
+
+
+function redraw_graph(box,dt_state,display_edges_flag,points,draw_points,clear_box) =
+let
+    XX =if clear_box then w_clear_box(box) else f;
+    nodes,bnodes,bedges,display_edges = dt_state;
+    display_edges = if display_edges_flag then display_edges[#display_edges-1]
+                     else flatten(display_edges);
+    XX = w_clip_and_draw_segments(display_edges,1,w_white,box);
+    XX =if draw_points then w_draw_points(points,w_white,box)
+             else []bool;
+in XX $
+
+
+function reset_zoom(zbox,dt_state,points,win,box1,szbox) =
+let
+    win,box = w_reset_box_size("points",zbox,win);
+    foo = w_draw_rectangle(w_bounds_from_box(box1),1,w_xor,szbox);
+    foo = w_draw_rectangle(w_bounds_from_box(box),1,w_xor,szbox);
+    bar = redraw_graph(box,dt_state,f,points,t,t);
+in win,box $
+
+
+function dt_demo_loop(dt_state,win,boxes,points) =
+let 
+    type,button_name,pt,(state,button),ch = w_get_input(win);
+    box = boxes[GRAPH_BOX];
+    szbox = boxes[ZOOM_BOX];
+in
+    %--------QUIT---------------------------%
+    if (eql(type,"button") and eql(button_name,"quit")) or (ch==`q) then 0
+
+    %-------- ZOOM IN ON MIDDLE BUTTON CLICK-------------- %
+    else if eql(type,"click") and (button == 2) then
+        if (eql(button_name,"points")) then
+        let
+            zbox = w_get_zoom_box(pt,2,box);
+            win,box = reset_zoom(zbox,dt_state,points,win,box,szbox);
+        in dt_demo_loop(dt_state,win,[box,szbox],points)
+        else dt_demo_loop(dt_state,win,boxes,points)
+
+    %------- ZOOM OUT------------------------%
+    else if (eql(type,"button") and eql(button_name,"zoom up")) then
+       let
+            zbox = w_bounding_box(points);
+            win,box = reset_zoom(zbox,dt_state,points,win,box,szbox);
+        in dt_demo_loop(dt_state,win,[box,szbox],points)
+
+    %----------Deal with Non Buttons --------------%
+    else if not(eql(type,"button")) then
+        dt_demo_loop(dt_state,win,boxes,points)
+    else
+          %---------STEP-----------------------%
+        if eql(button_name,"step") then let
+               new_state,stop_condition = dt_step(dt_state);
+               XX = redraw_graph(box,new_state,t,points,f,f);
+            in dt_demo_loop(new_state,win,boxes,points)
+
+          %----Distributions buttons ---------------%
+        else let
+               N = dt_get_number_of_points(win,boxes);
+               points = if eql(button_name,"line") then line_test(N)
+                        else if eql(button_name,"uniform") then uniform_test(N)
+                        else if eql(button_name,"diagonal") then diagonal_test(N)
+                        else plummer_test(N);
+               zbox = w_bounding_box(points);
+               dt_state = init_dt_state(points);
+               win,box = reset_zoom(zbox,dt_state,points,win,box,szbox);
+               XX = redraw_graph(szbox,dt_state,t,points,t,t);
+        in dt_demo_loop(dt_state,win,boxes,points) $
+               
+
+function init_plot(ignore) =
+let
+    % to start with points are between 0.0..1.0 %
+    bbox = w_bounding_box([(0.0,0.0),(1.0,1.0)]);
+
+    % main window & box %
+    display = get_environment_variable("DISPLAY");
+    win = w_make_window(((100,0),(800,675)),"Delaunay Demo",w_white,display);
+    win,box = w_add_box(((175,50),(600,600)),bbox,"points",w_black,win);
+
+    % zoom box window %
+    win,box2 = w_add_box(((28,50),(130,130)),bbox,"points2",w_black,win);
+    win = w_add_text((50,20),"Zoom Display",w_black,win);
+
+    % control buttons %
+    buttons = ["quit","zoom up","step"];
+    win = w_add_button_stack(((35,220),(95,35),(0,50)),buttons,w_black,win);
+    win = w_add_text((50,370),"Controls",w_black,win);
+
+    % Distribution buttons%
+    buttons = ["line","diagonal","uniform","plummer"];
+    win = w_add_button_stack(((35,410),(95,35),(0,50)),buttons,w_black,win);
+    win = w_add_text((50,605),"Distributions",w_black,win);
+
+    % zooming message%
+    win = w_add_text((250,20),"To zoom press the middle button on one corner and release on the other",w_black,win);
+in win,[box,box2] $
+
+function dt_demo(ignore) =
+let
+    win,boxes        = init_plot(0);
+    state = ([[](int,float,float)], 
+             [[](int, float, float)], [[[](int, int)]],
+             [[]((float,float),(float,float))]);
+    points = [](float,float);
+    part         = dt_demo_loop(state,win,boxes,points);
+in w_kill_window(win) $
+

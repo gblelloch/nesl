@@ -1,0 +1,108 @@
+% UTILITIES %
+
+function shortcut_many(D,i) =
+if (i == 0) then D else shortcut_many(D->D,i-1) $
+
+function shortcut_all(D,i) =
+let p = shortcut_many(D,i-1);
+    pp = p->p;
+in if eql(p,pp) then pp else shortcut_all(pp,i) $
+
+function get_from_edges(V,E) =
+  {(e1,e2): e1 in V->{e1:(e1,e2) in E}; e2 in V->{e2:(e1,e2) in E}} $
+
+function delete_self_edges(E) = {(e1,e2) in E | e1 /= e2} $
+
+function flip_edge_up(E) =
+ let (e1,e2) = E; fl = e1 > e2; 
+ in (select(fl,e2,e1),select(fl,e1,e2))  $
+
+function compress_edges(D,E) =
+  {flip_edge_up(e) : e in delete_self_edges(get_from_edges(D,E))} $
+
+function compress_graph(Dnew,Dold,E) =
+let nflags = {n == o : n in Dnew; o in Dold};
+    packed_edges = compress_edges(Dnew,E);
+    Enew = get_from_edges(enumerate(nflags),packed_edges);
+in (Enew,pack_index(nflags));
+
+% MAKING GRAPHS %
+
+function make_toroid(n) =
+let r = [1:1+n^2]<-{(i+n-1,i): i in [0:n^2:n]};   % across pointers %
+    d = [n:n^2]++[0:n];                           % down pointers %
+    s = index(n^2);                               % self pointers %
+in {flip_edge_up(e): e in {(s,r):s;r} ++ {(s,d):s;d}} $
+
+function subselect_edges(E,percent) =
+let maxval = 1000000; 
+    cutoff = round(percent*float(maxval));
+in {e in E | rand(maxval) < cutoff} $
+
+% THE CONNECTED COMPONENT ALGORITHMS %
+
+function concomp1(D,E) =
+if #E == 0 then D
+else 
+  let newD = shortcut_all(D<-E,3);
+      newE = compress_edges(newD,E);
+  in concomp1(newD,newE) $
+
+function concomp2(D,E) =
+if #E == 0 then D
+else
+  let newD = shortcut_all(D<-E,4);
+      (newE,I) = compress_graph(newD,D,E);
+      R = concomp2(index(#I),newE);
+      Ins = put(get(I,R),I,newD);
+  in Ins->Ins $
+
+function concomp3(D,E) =
+if #E == 0 then D
+else
+  let newD = shortcut_all(D<-E,7);
+      (newE,I) = compress_graph(newD,D,E);
+      R = concomp1(index(#I),newE);
+      Ins = put(get(I,R),I,newD);
+  in Ins->Ins $
+
+% TIMING ROUTINES %
+
+function timemany1(D,E,i) =
+if i == 0 then (10e6,0)
+else let (R,Timex) = time(concomp1(D,E));
+         comps = count({r == i: R; i in index(#D)});
+         (RT,RC) = timemany1(D,E,i-1);
+     in (min(Timex,RT),comps) $
+
+function timecomp1(n,percent,trials) =
+let E = subselect_edges(make_toroid(n),percent);
+    D = index(n*n);
+in timemany1(D,E,trials) $
+
+function timemany2(D,E,i) =
+if i == 0 then (10e6,0)
+else let (R,Timex) = time(concomp2(D,E));
+         comps = count({r == i: R; i in index(#D)});
+         (RT,RC) = timemany2(D,E,i-1);
+     in (min(Timex,RT),comps) $
+
+function timecomp2(n,percent,trials) =
+let E = subselect_edges(make_toroid(n),percent);
+    D = index(n*n);
+in timemany2(D,E,trials) $
+
+function timemany3(D,E,i) =
+if i == 0 then (10e6,0)
+else let (R,Timex) = time(concomp3(D,E));
+         comps = count({r == i: R; i in index(#D)});
+         (RT,RC) = timemany3(D,E,i-1);
+     in (min(Timex,RT),comps) $
+
+function timecomp3(n,percent,trials) =
+let E = subselect_edges(make_toroid(n),percent);
+    D = index(n*n);
+in timemany3(D,E,trials) $
+
+
+% Biggest that seems to work with 4Meg is 630x630 = .4meg nodes %

@@ -1,0 +1,52 @@
+%
+Functions for testing the nesl plot routines.
+Written by Girija Narlikar.
+%
+
+function place_eye(w,button,eye) = 
+let 
+    (x0,y0,btn,cntrl) = get_mouse_info(w);
+in 
+    if (btn /= button) then place_eye(w,button,eye)
+    else 
+	let 
+	    x0 = x0-5.0;
+	    y0 = y0-5.0;
+	in 
+	    draw_lines({(x+x0,y+y0): (x,y) in eye},1,w)$
+
+function test_graphics(ignore) =
+let 
+    w = make_window(((100,100),(450,500)), bounding_box([(0,0),(150,160)]),  
+		    "happy face ",display);
+    face = [(30,90),(30,50),(40,40),(50,40),(50,30),(60,20),(100,20),
+	    (110,30),(110,40),(120,40),(130,50),(130,80)];
+    fc = draw_lines(face,1,w);
+    left_ear = [(30,80),(20,80),(20,60),(30,60)];
+    le = draw_lines(left_ear,1,w);
+    right_ear = [(130,80),(140,80),(140,60),(130,60)];
+    re = draw_lines(right_ear,1,w);
+    rings = [(24,64),(136,64)];
+    rg = draw_points(rings,w);
+    mouth = [(60,50),(70,40),(90,40),(100,50)];
+    grin = [((59,49),(61,51)),((99,51),(101,49))];
+    gr = draw_segments(grin,1,w);
+    mt = draw_lines(mouth,1,w);
+    teeth = [(71,40),(71,36),(79,36),(79,40),(81,40),(81,36),(89,36),(89,40)];
+    th = draw_lines(teeth,1,w); 
+    nose = [((75,60),(85,60))];
+    ns = draw_segments(nose,1,w); 
+    hair = [(20,90),(60,90),(60,100),(90,100),(100,110),(110,90),(120,90),
+	    (120,81),(140,81),(140,110),(130,110),(130,120),(120,120),
+	    (110,130),(50,130),(30,110),(30,100),(20,100),(20,90)];
+    hr = draw_lines(hair,2,w); 
+    str1 = draw_strings([(20,150)],
+			["Click leftmost button to place left eye"],w);
+    eye = [(10.0,10.0),(10.0,0.0),(0.0,0.0),(0.0,10.0),(10.0,10.0),
+	   (6.0,10.0),(6.0,6.0),(10.0,6.0)];
+    e1 = place_eye(w,1,eye);
+    str2 = draw_strings([(30,140)],
+			["Click rightmost button to place right eye"],w);
+    e2 = place_eye(w,3,eye);
+in 
+    close_window(w) $

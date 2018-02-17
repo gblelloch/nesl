@@ -1,0 +1,652 @@
+%
+;;;
+;;; Copyright (c) 1992 Carnegie Mellon University 
+;;;                    SCAL project: Guy Blelloch, Siddhartha Chatterjee,
+;;;                                  Jonathan Hardwick, Jay Sipelstein,
+;;;                                  Marco Zagha
+;;; All Rights Reserved.
+;;;
+;;; Permission to use, copy, modify and distribute this software and its
+;;; documentation is hereby granted, provided that both the copyright
+;;; notice and this permission notice appear in all copies of the
+;;; software, derivative works or modified versions, and any portions
+;;; thereof, and that both notices appear in supporting documentation.
+;;;
+;;; CARNEGIE MELLON ALLOWS FREE USE OF THIS SOFTWARE IN ITS "AS IS"
+;;; CONDITION.  CARNEGIE MELLON DISCLAIMS ANY LIABILITY OF ANY KIND FOR
+;;; ANY DAMAGES WHATSOEVER RESULTING FROM THE USE OF THIS SOFTWARE.
+;;;
+;;; The SCAL project requests users of this software to return to 
+;;;
+;;;  Guy Blelloch				guy.blelloch@cs.cmu.edu
+;;;  School of Computer Science
+;;;  Carnegie Mellon University
+;;;  5000 Forbes Ave.
+;;;  Pittsburgh PA 15213-3890
+;;;
+;;; any improvements or extensions that they make and grant Carnegie Mellon
+;;; the rights to redistribute these changes.
+;;;
+%
+
+%  Old Code----Replaced by built-in rank
+function bit(v,i) : int,int >> bool =
+  1 == (rshift(v,i) and 1) $
+
+function radix_rank_r(v,i,start,end) =
+if start == end then permute(index(#i),i)
+else let (counts,index) = split_index({bit(v,start): v});
+     in radix_rank_r(permute(v,index),permute(i,index),start+1,end) $
+
+function radix_rank(v,bits) = radix_rank_r(v,[0:#v],0,bits) $
+%
+
+% *****
+function rank(a) 
+"Returns the rank of each element of the sequence {\\tt a}.  The
+rank of an element is the position it would appear in if the sequence 
+were sorted.  A sort of a sequence {\\tt a} can be implemented
+as {\\tt permute(a, rank(a))}.  The rank is stable."
+= let vector(seg,val) = a in vector(seg,!prim-rank_up(val,seg)) $
+
+function rank_down(a) 
+= let vector(seg,val) = a in vector(seg,!prim-rank_down(val,seg)) $
+
+function sort(a)
+"Sorts the input sequence."
+ = permute(a,rank(a)) $
+****** %
+
+function char_rank(v) = rank({char_code(v):v}) $
+
+
+function pack_index(flg) = pack(zip(index(#flg),flg)) $
+
+
+function ks_subselect(s,k,flags) =
+let l_count = count(flags);
+    in_grt = l_count <= k;
+    new_s = {e in s; flg in flags| in_grt xor flg};
+    new_k = select(in_grt,k-l_count,k)
+in (new_s,new_k) $
+
+function ks_pick_l_subset(s,k) =
+let pivot = s[#s/2];
+    flags = {e < pivot: e in s};
+in ks_subselect(s,k,flags) $
+
+function ks_pick_g_subset(s,k) =
+let pivot = s[#s/2];
+    flags = {e <= pivot: e in s};
+in ks_subselect(s,k,flags) $
+
+function ks_done(s) =
+  let pivot = s[0];
+  in (pivot, (count({e == pivot: e in s}) == #s)) $
+
+function kth_smallest_internal(s,k) =
+let (s,k) = ks_pick_l_subset(s,k);
+    (s,k) = ks_pick_g_subset(s,k);
+    (s,k) = ks_pick_l_subset(s,k);
+    (s,k) = ks_pick_g_subset(s,k);
+    (p,donep) = ks_done(s)
+in if donep then p else kth_smallest_internal(s,k) $
+
+function kth_smallest(s,k) 
+"Returns the {\\tt k}th smallest element of a sequence {\\tt s}
+({\\tt k} is 0 based).  It uses the quick-select algorithm and
+therefore has expected work complexity of $O(n)$ and an expected step
+complexity of $O(\\lg n)$."
+  = kth_smallest_internal(s,k) $
+
+function median(s) = kth_smallest(s,#s/2) $
+
+hash_table_factor = 3 $
+
+
+function name_internal(a) =
+if #a == 0 then [] int
+else
+  let len2 = hash_table_factor * #a;
+      ran = {hash(v,len2) : (p,v) in a};
+      newa = get((dist(identity(a[0]),len2)<-{(ran,a): ran; a}),ran);
+      pidx = {i in [0:#a]; (p,v) in a; (np,nv) in newa | not(eql(v,nv))};
+      rec  = name_internal(get(a,pidx));
+  in {i: (i,v) in newa} <- {(pidx,rec): pidx; rec} $
+
+function name(a)
+"This function assigns an integer label to each unique value of the
+sequence {\\tt a}.  Equal values will always be assigned the same
+label and different values will always be assigned different labels.
+All the labels will be in the range {\\tt [0..#a)} and will correspond to
+the position in {\\tt a} of one of the elements with the same value.
+The function {\\tt remove_duplicates(a)} could be implemented as
+{\\tt \\{s in a; i in [0:#a]; r in name(a) | r == i\\}}."
+= name_internal({(i,s): i in index(#a); s in a}) $
+
+function mark_duplicates(s)
+"Marks the duplicates such that only one instance of each value in a
+sequence is marked with a true flag.  Elements are 
+considered duplicates if {\\tt eql} on them returns T."
+=
+let i = [0:#s];
+    p = {(i,s):i;s};
+in { r == i : i ; r in name_internal(p)} $
+
+function remove_duplicates(s) 
+"Removes duplicates from a sequence.  Elements are considered duplicates
+if {\\tt eql} on them returns T."
+=
+let i = [0:#s];
+    p = {(i,s):i;s};
+in {s ; i ; r in name_internal(p) | r == i} $
+
+function union(a,b) 
+"Given two sequences each which has no duplicates, {\\tt union} will
+return the union of the elements in the sequences."
+= remove_duplicates(a++b) $
+
+function intersection(a,b)
+"Given two sequences each which has no duplicates, {\\tt intersection} will
+return the intersection of the elements in the sequences."
+=
+let s = a ++ b;
+    i = [0:#s];
+    p = {(i,s):i;s};
+in {s ; i ; r in name_internal(p) | r /= i} $
+
+function set_difference(a,b)
+"Given two sequences each which has no duplicates, {\\tt intersection} will
+return the elements that appear in {\tt a} but not in {\tt b}."
+=
+let s = a ++ b;
+    n = name(a++b);
+    c = dist(t,#n)<-{i,f : i in drop(n,#a)};
+in {a; fl in c->take(n,#a) | fl} $
+
+
+
+function next_char(candidates,w,s,i) =
+if (i == #w) then candidates
+else
+  let letter    = w[i];
+      next_l    = get(s,{c + i: c in candidates});
+      candidates = {c in candidates; n in next_l | eql(n,letter)};
+  in next_char(candidates, w, s, i+1) $
+
+function search_for_subseqs(subseq, sequence)
+"Returns indices of all start positions in {\\tt sequence} where the
+string specified by {\\tt subseq} appears."
+ =  if (#sequence < #subseq) then [] int
+    else next_char([0:#sequence - #subseq + 1],subseq,sequence,0) $
+
+function length_from_flags(flags) 
+"Given a sequence of boolean flags, this will return the length of
+from each true flag to the next.  A true flag is always assumed in
+the first position."
+=
+if (#flags == 0) then [] int
+else
+  let flags = rep(flags,t,0);
+      off = pack_index(flags);
+  in {n - o : n in next(off,#flags); o in off} $ 
+
+
+function collect_pairs(key_value_pairs) =
+if #key_value_pairs == 0 then dist(key_value_pairs,0)
+else
+  let name = name({k: (k,v) in key_value_pairs});
+      rnk = rank(name);
+      new_name = permute(name,rnk);
+      new_pairs = permute(key_value_pairs,rnk);
+      diff = {s /= p : s in new_name ; p in rotate(new_name,1)};
+  in partition(new_pairs,length_from_flags(diff)) $
+
+function collect(key_value_pairs)
+"Takes a sequence of {\\tt (key, value)} pairs, and collects each set
+of {\\tt values} that have the same {\\tt key} together into a
+sequence.  The function returns a sequence of {\\tt (key,
+value-sequence)} pairs.  Each {\\tt key} will only appear once in the
+result and the {\\tt value-sequence} corresponding to the key will
+contain all the values that had that key in the input."
+= {(first(g[0]),{v : (k,v) in g}) : g in collect_pairs(key_value_pairs)} $
+
+function int_collect_pairs(key_value_pairs) =
+if #key_value_pairs == 0 then dist(key_value_pairs,0)
+else
+  let rnk = rank({k: (k,v) in key_value_pairs});
+      new_pairs = permute(key_value_pairs,rnk);
+      new_name = {k: (k,v) in new_pairs};
+      diff = {s /= p : s in new_name ; p in rotate(new_name,1)};
+  in partition(new_pairs,length_from_flags(diff)) $
+
+function int_collect(key_value_pairs) 
+  :  [(int, b)] -> [(int, [b])] :: (b in any)
+"Version of collect that works when the keys are integers.  As well
+as collecting, the subsequences are returned with the keys in sorted
+order."
+=
+  {(first(g[0]),{v : (k,v) in g}) : g in int_collect_pairs(key_value_pairs)} $
+
+function histogram(a) = {a,sum(c): a,c in collect({a,1: a})} $
+
+% String reading stuff %
+
+
+% THis is quite slow because of the conditional %
+function parse_int_recursive(str, i, l, sum) =
+  if (l == i) then (sum,i)
+  else 
+    let ch = str[i]
+    in if (not(digitp(ch))) then (sum,i)  
+       else parse_int_recursive(str, i + 1, l, 
+                          sum * 10 + (char_code(ch) - char_code(`0))) $
+
+function str_i(str,i,l) =
+  if i < l then str[i] else `x $
+
+function parse_signed_int(str,i,l) =
+let 
+    (negativep,i) = if str_i(str,i,l) == `- then (t,i+1) 
+                    else if str_i(str,i,l) == `+ then (f,i+1)
+                    else (f,i);
+    (val,i) = parse_int_recursive(str,i,l,0)
+in
+    (val,negativep,i) $
+
+function parse_unsigned_int(str) = 
+let 
+    flag = all({digitp(ch):ch in str});
+    val = sum({e * (char_code(ch) - char_code(`0)): 
+	       e in mult_scan(dist(10,#str)); 
+	       ch in reverse(str)})
+in val,flag $
+
+function parse_int(str) 
+"Parses a character string into an integer.  Returns the integer and a
+flag specifying whether the string was successfully parsed.  The
+string must be in the format: {\\tt [+-]?[0..9]*}."
+=
+  let l = #str;
+      (val,negativep,i) = parse_signed_int(str,0,l)
+  in (select(negativep,-val,val), i == l and l /= 0) $
+
+function parse_fract_recursive(str, i, l, fr, sum) =
+  if (l == i) then (sum,i)
+  else 
+    let ch = str[i];
+    in if (not(digitp(ch))) then (sum,i)
+       else parse_fract_recursive(str, i + 1, l, fr*.1,
+                            sum + fr*(float(char_code(ch) - char_code(`0)))) $
+
+function parse_float(str)  
+"Parses a character string into an float.  Returns the float and a
+flag specifying whether the string was successfully parsed.  
+The string must be in the format:\\\\
+{\\tt [+-]?[0..9]*(.[0..9]*)?(e[+-]?[0..9]*)?}."
+=
+let l = #str;
+    (head,negativep,i) = parse_signed_int(str,0,l);
+    val = float(head)
+in if (i == l) then (select(negativep,-val,val),t)
+   else let (val,i) = if (str[i] == `.) then
+                        parse_fract_recursive(str,i+1,l,.1,val)
+                      else (val,i);
+            val = select(negativep,-val,val)
+        in if (i == l) then (val,t)
+           else 
+	       let 
+		   (exponent,expneg,i) = if (str[i] == `e) then
+		                           parse_signed_int(str,i+1,l)
+    		                         else (1,f,i);
+                   exponent = select(expneg,-exponent,exponent)
+                in if (i == l) then (val*expt(10.0,float(exponent)),t)
+                   else (0.0,f) $
+
+function group_by_separator_flags(str, sep_flags) =
+  let 
+    space_idx = [-1]++pack(zip(index(#str),sep_flags));
+    lengths = {n-i-1: n in next(space_idx,#str); i in space_idx| n /= i+1}
+  in partition(pack(zip(str,{not(fl): fl in sep_flags})),lengths) $
+
+function flag_partition(str, flags) =
+let
+    idx = pack(zip(index(#str),flags));
+    lengths = {n-i: n in next(idx,#str); i in idx}
+in partition(str,lengths) $
+
+function group_by_separator_flags_x(str, sep_flags) =
+  let 
+    space_idx = pack(zip(index(#str),sep_flags));
+    lengths = {i-p-1: p in previous(space_idx,-1); i in space_idx};
+    len = sum(lengths);
+    vals = pack(zip(str,{not(fl): fl in sep_flags}));
+    diff = #vals - len;
+    lengths = (if plusp(diff) then lengths++[diff] else lengths)
+  in partition(vals,lengths) $
+
+function wordify(str) 
+"Breaks up a string into words (a sequence of strings).  Either a space,
+tab, or newline is considered a separator.  All separators are removed."
+=
+  group_by_separator_flags(
+     str,{c == space or c == newline or c == tab: c in str}) $
+
+function linify(str)
+"Breaks up a string into lines (a sequence of strings).  Only
+a newline is considered a separator.  All separators are removed."
+= group_by_separator_flags_x(str,{c == newline: c in str}) $
+
+function char_map(chars) = dist(f,256) <- {(char_code(d),t): d in chars} $
+
+function group_by_space(str, space_chars) =
+let
+    flags = if (#str*#space_chars > 128) then
+                {c: c in char_map(space_chars)} -> {char_code(str): str}
+            else {any({s == c: s in space_chars}): c in str}
+in group_by_separator_flags(str,flags) $
+
+function justify_clip(a,b,max) =
+let val = a +b;
+in if val >= max then a else val $
+
+function justify_shortcut(p,val) =
+let 
+    val = val <- {p,t: p; val | val};
+    gp = p->p;
+in if eql(gp,p) then val else justify_shortcut(gp,val) $
+
+function justify_pad_word(word) =
+word ++ dist(space,select(word[#word-1] == `.,2,1)) $
+
+function justify_fill_line(line) =
+flatten({justify_pad_word(word): word in drop(line,-1)}) ++ line[#line-1] $
+
+function justify_text(text,line_length) =
+let
+    words = wordify(text);
+    lengths = {#w+1: w in words};
+    pos = flatten({dist(i,l): i in [0:#words]; l in lengths});
+    total_length = #pos;
+    next = pos->{justify_clip(offset,line_length+1,total_length)
+		 : offset in plus_scan(lengths)};
+    flg = justify_shortcut(next,rep(dist(f,#next),t,0));
+    lines = flag_partition(words,flg);
+in {justify_fill_line(line): line in lines} $
+
+function parse_int_vect(str) =
+  let 
+    (vals,flags) = unzip({parse_int(word): word in wordify(str)})
+  in (vals,all(flags)) $
+
+function grep(str,fname) = 
+  {l in linify(read_string_from_file(fname))
+   | plusp(#search_for_subseqs(str,l))} $
+
+function lowercase(char)
+"Converts a character string into lowercase characters."
+ =
+  select((char >= `A) and (char <= `Z),code_char(char_code(char)+32),char) $
+
+function uppercase(char) 
+"Converts a character string into uppercase characters."
+=
+  select((char >= `a) and (char <= `z),code_char(char_code(char)-32),char) $
+
+function string_eql(str1,str2) 
+"Compares two strings for equality without regards to case." 
+=
+  eql({lowercase(str1):str1},{lowercase(str2):str2}) $
+
+function find(element,seq) 
+"Returns the index of the first place that {\\tt element} is found in 
+{\\tt seq}.  If {\\tt element} does not appear in the sequence, then
+-1 is returned."
+= 
+let ids = {i in index(#seq); s in seq | eql(element,s)}
+in if #ids == 0 then -1 else ids[0] $
+
+function group_by(sequence,len) = 
+if rem(#sequence,len) == 0 then
+    partition(sequence,dist(len,#sequence/len))
+else partition(sequence,
+               dist(len,#sequence/len)++[rem(#sequence,len)]) $
+
+function prompt(string) =
+let foo = print_string(string);
+    (line,eof) = read_check(read_line(stdin))
+in if (#line == 0) and not(eof) then prompt(string) else line $
+
+function scan(fun,ident,a) =
+if #a == 1 then [ident],fun(ident,a[0])
+else
+    let 
+	n = #a;
+	even = a -> [0:n and -2:2];
+	odd =  a -> [1:n:2];
+	last = a[n-1];
+	(sums,total) = scan(fun,ident,{fun(even, odd): odd; even});
+	res = interleave(sums,{fun(sums,even):sums;even})
+    in
+	if evenp(n) then res,total
+	else snoc(res,total), fun(total,last) $
+%
+function nest(p, segs) = 
+  let vector(seg,vals) = p;
+      vector(seg1,seg2) = segs;
+  in vector(seg1,vector(seg2,vals)) $
+%
+
+%;;;;;;;;;;;;;;;;;;;;;;;;;
+The rest of this file implements a parallel hash table using quadratic probing.
+The user routines in this file are:
+
+  make_table(type,maxsize) -- create a table of a given maximum size
+  table_entries(table)     -- return all the entries of a table
+  insert_table(key_value_pairs,table) -- insert a sequence of elements
+                                         into a table based on keys
+  create_table(key_value_pairs) -- make a table and insert a sequence 
+                                   of elements into it.
+  search_table(keys,table) -- search a table based on a sequence of keys, and
+                              return a flag and associated values if found
+  fast_create_table -- a faster version of create_table
+;;;;;;;;;;;;;;;;;;;;;;;;;%
+
+% 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; MAKING AND EXAMINING A TABLE
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+%
+
+
+% The hashtable datatype 
+  A table will consist of a sequence of (flag,key,value) triples.
+  The flag is used to nonempty entries %
+datatype hashtable([(bool,a,b)]) :: (a in any; b in any) $
+
+% Creates a table that contains objects of the same type as the
+  type argument.  No more than maxsize elements should be inserted into
+  this table. %
+function make_table(type,maxsize) =
+   % 3 is picked to minimize the number of collisions %
+   hashtable(dist((f,identity(type)),3*maxsize-1)) $
+
+% Returns all the entries of a table. %
+function table_entries(table) =
+let
+    hashtable(table) = table;
+in {(key,val): (flag,key,val) in table | flag} $    
+
+% 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; INSERTION INTO A TABLE
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+%
+
+%The main loop of hash table insertion.  It tries to insert a set of values
+ at location hash+i^2 where i is the iteration, and hash is a previously
+ computed hash function for each value.
+ The arguments are:
+    hkv   -- a sequence of (hash,key,value) triples, each to be inserted 
+             into the table
+    i     -- the iteration, incremented by 1 on each recursive call
+    table -- the table being inserted into, consists of a sequence
+             of (flag,key,value) triples.  If the flag is set, then that
+             position is full.
+ result -- a new hash table with all the key,value pairs inserted.
+%
+function insert_internal(hkv,i,table) =
+if #hkv == 0 then table
+else
+  let 
+      len = #table;
+
+      % For each element calculate the position to try to insert %
+      positions = {rem(h + i^2,len) : (h,k,v) in hkv};
+
+      % Check if position is already occupied %
+      is_occupied = {flag:(flag,key,val) in table}->positions;
+
+      % If not occupied, insert (true,key,value) at the position %
+      new_table = table<-{(position,(t,key,value))
+			  : position in positions
+			  ; (h,key,value) in hkv ; is_occupied
+			  | not(is_occupied)};
+
+      % Since there could have been a collision with someone else that was
+        trying to insert, read the key back to make sure it matches with yours%
+      new_keys = {key:(flag,key,value) in new_table}->positions;
+
+      % Pack out the (hash,key,value) pairs that where successfully inserted %
+      new_hkv = {(hash,key,value) in hkv
+		 ; is_occupied ; new_key in new_keys
+		 | is_occupied or not(eql(key,new_key))};
+
+  in insert_internal(new_hkv, i+1, new_table) $
+
+% Inserts a sequence of (key,value) pairs into a table. %
+function insert_table(key_value_pairs,table) =
+  let 
+      hashtable(table) = table;
+      len = #table;
+      
+      % tag a hash value onto each (key,value) pair %
+      hkv = {hash(key,len),key,value:  (key,value) in key_value_pairs}
+
+  % Call insert_internal, starting with iteration 0 %
+  in hashtable(insert_internal(hkv,0,table)) $
+
+% Create a table initialized with the (key,value) pairs passed in %
+function create_table(key_value_pairs) =
+let table = make_table(key_value_pairs[0],#key_value_pairs)
+in insert_table(key_value_pairs,table) $
+
+% 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; SEARCHING A TABLE
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+%
+
+% Main loop for searching a table.  The keys is searched for at
+  position hash+i^2, where i is the iteration and hash it the hash
+  value for each key.
+  The inputs are:
+    hk    -- a sequence of (hash,key) pairs, each key is being searched for
+    i     -- the iteration, incremented by 1 on each recursive call
+    table -- the hash table.  A sequence of (flag,key,value) triples.
+  Result -- sequence of (value,flag) pairs for each input triple.
+            If flag is true, then the key was found with the given value
+%
+function search_internal(hk,i,table) =
+if #hk == 0 then identity({v,t: fl,nk,v in table})
+else
+  let 
+      len = #table;
+      
+      % For each element calculate the position to fetch from %
+      positions = {rem(h + i^2,len) : (h,k) in hk};
+
+      % Get table entries from positions to see if keys match %
+      entries = table->positions;
+
+      % Exctract subfields %
+      occupied = {oc   : (oc,key,value) in entries};
+      keys     = {key  : (oc,key,value) in entries};
+      values   = {value: (oc,key,value) in entries};
+
+      % Check entry to see if keys match %
+      match = {eql(key,table_key): table_key in keys; (hash,key) in hk};
+
+      % Generate indices of collisions %
+      hit_indices = pack_index({not(match) and occupied: match; occupied});
+
+      % Recursively search table on hash_hits %
+      results = search_internal(hk->hit_indices,i+1,table)
+
+  % insert results back into sequence %      
+  in zip(values,occupied)<-{(i,r): i in hit_indices; r in results} $
+
+function search_table(keys,table) =
+let
+    hashtable(table) = table;
+    len = #table;
+    hk = {hash(key,len),key:  key in keys}   % tag hash values onto keys %
+in search_internal(hk,0,table) $
+
+% 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; FASTER ROUTINES FOR CREATE_TABLE
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+%
+
+% This is like insert_internal, but takes advantage of the fact that
+  the table starts out empty (it does not need to check if each
+  entry is occupied, and can therefore avoid passing the keys around. %
+function fast_insert_internal(hashvals,i,table) =
+if #hashvals == 0 then [] int
+else
+    let
+	len = #table;
+	positions = {rem(h + i^2,len) : h in hashvals};
+	is_full   = {id /= -1: id in table->positions};
+	indices   = [0:#positions];
+	new_table = table<-zip(positions,indices);
+	idx       = pack_index({i /= entry or is_full
+				: i in indices; is_full
+				; entry in new_table->positions});
+	results   = fast_insert_internal(hashvals->idx,i+1,new_table)
+in positions <- {(i,r): i in idx; r in results} $
+
+function fast_create_table(key_value_pairs) =
+let 
+    len = 3 * #key_value_pairs - 1;
+    h = {hash(key,len):  (key,value) in key_value_pairs};
+    pos = fast_insert_internal(h,0,dist(-1,len));
+    empty_table = dist((f,identity(key_value_pairs[0])),len);
+    table = empty_table <- {pos,(t,k,v): (k,v) in key_value_pairs; pos}
+in hashtable(table) $
+
+% RAND SEEDING %
+
+%
+function rand_seed(n) : int -> bool = 
+let 
+    foo = hash(n,10^4);
+    ignore = {rand(i): i in dist(10,foo)}
+in t $
+%
+
+function map_rec(fun,sout,sin,i,n) =
+if i == n then sout
+else map_rec(fun,rep(sout,fun(sin[i]),i),sin,i+1,n) $
+    
+function map(fun,seq) =
+let n = #seq;
+in
+    if n < 2 then {fun(x): x in seq}
+    else 
+	let 
+	    foo = fun(seq[0]);
+	    out = dist(identity(foo),n);
+	in map_rec(fun,rep(out,foo,0),seq,1,n) $
+

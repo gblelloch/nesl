@@ -1,0 +1,797 @@
+;;;
+;;; Copyright (c) 1992 Carnegie Mellon University 
+;;;                    SCAL project: Guy Blelloch, Siddhartha Chatterjee,
+;;;                                  Jonathan Hardwick, Jay Sipelstein,
+;;;                                  Marco Zagha
+;;; All Rights Reserved.
+;;;
+;;; Permission to use, copy, modify and distribute this software and its
+;;; documentation is hereby granted, provided that both the copyright
+;;; notice and this permission notice appear in all copies of the
+;;; software, derivative works or modified versions, and any portions
+;;; thereof, and that both notices appear in supporting documentation.
+;;;
+;;; CARNEGIE MELLON ALLOWS FREE USE OF THIS SOFTWARE IN ITS "AS IS"
+;;; CONDITION.  CARNEGIE MELLON DISCLAIMS ANY LIABILITY OF ANY KIND FOR
+;;; ANY DAMAGES WHATSOEVER RESULTING FROM THE USE OF THIS SOFTWARE.
+;;;
+;;; The SCAL project requests users of this software to return to 
+;;;
+;;;  Guy Blelloch				guy.blelloch@cs.cmu.edu
+;;;  School of Computer Science
+;;;  Carnegie Mellon University
+;;;  5000 Forbes Ave.
+;;;  Pittsburgh PA 15213-3890
+;;;
+;;; any improvements or extensions that they make and grant Carnegie Mellon
+;;; the rights to redistribute these changes.
+;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; DEFINITIONS
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defrec (stream int))
+(set nullstr (stream -1) :documentation "The null stream.")
+(set stdin   (stream 0)  :documentation "The standard input stream.")
+(set stdout  (stream 2)  :documentation "The standard output stream.")
+(set stderr  (stream 2)  :documentation "The standard error stream.")
+(set stdout_internal (stream 1))
+(set newline #\newline :documentation "The newline character.")
+(set space #\space :documentation "The space character.")
+(set tab #\tab :documentation "The tab character.")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; WRITING STRINGS AND CHARS TO STDOUT (actually, stderr)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defop (prim_print_char a) ! ((pair char bool) <- char)
+  (:primitive (WRITE CHAR)))
+
+(defop (print_char v) ! ((bool <- char))
+  (with ((temp (prim_print_char v))) t)
+  :documentation "Prints a character to standard output.")
+
+(defop (print_string v) ! ((bool <- v.char))
+  (with (((vector (pair seg vals)) v)
+	 (temp (prim_print_char vals))) 
+    t)
+  :documentation "Prints a character string to standard output.")
+
+(defop (print_line str)
+  (print_string (snoc str #\newline)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; FILE ERROR HANDLER
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defop (read_check val flag err_message)
+  (if flag val
+    (with ((s1 (print_line "ERROR while trying to read from a stream:"))
+	     (s2 (print_line err_message)))
+	    (identity val)))
+  :documentation
+"Checks if a read succeeded and prints an error message if it did not.
+It also strips off the error information from the read functions.  For
+example, in the form {\\tt read_check(read_char(stream))}, if the read
+is successful it will return the character which is read, otherwise it
+will print an error message."
+  )
+
+(defop (write_check flag err_message)
+  (if flag t
+    (with ((s1 (print_line "ERROR while trying to write to a stream:"))
+	   (s2 (print_line err_message)))
+	  f))
+  :documentation
+"Checks if a write succeeded and prints an error message if it did
+not.  For example, in the form {\\tt
+write_check(write_string(\"foo\",stream))}, if the write is successful
+it will return {\\tt t}, otherwise it will print an error message and
+return {\\tt f}."
+)
+
+(defop (open_check str flag err_message)
+  (if flag str
+    (with ((s1 (print_line err_message))) str))
+  :documentation
+"Checks if an open on a file succeeded and prints an error message if
+it did not.  For example, in the form {\\tt
+open_check(open_in_file(\"/usr/foo/bar\"))}, if the open is successful
+it will return a stream, otherwise it will print an error message and
+return the null stream."
+)
+
+(defop (close_check flag err_message)
+  (if flag t
+    (with ((s1 (print_line "ERROR while trying to close a stream:"))
+	   (s2 (print_line err_message))) 
+	  f))
+  :documentation
+"Checks if a close on a stream succeeded and prints an error message
+if it did not.  For example, in the form {\\tt
+close_check(close_file(stream))}, if the close is successful it will
+return {\\tt t}, otherwise it will print an error message and return
+{\\tt f}.")
+
+(defop (prim_make_vect a)
+  (vector (make_segdes (prim_length a)) a))
+
+(defop (digest_err (pair message flag))
+  ! (((pair bool v.char) <- char bool))
+  (pair flag (prim_make_vect message)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; OPENING AND CLOSING FILES
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defop (prim_open_file filename mode) 
+  ! (((pair (stream) (pair char bool)) <- char int))
+  (:primitive (FOPEN)) )
+
+(defop (prim_close_file stream) ! (((pair char bool) <- (stream)))
+  (:primitive (FCLOSE)))
+
+(defop (open_file filename mode)
+  (with (((vector segdes filen) filename)
+	 ((pair stream err) (prim_open_file filen mode))
+	 ((pair flag message) (digest_err err))
+	 (message (if flag message
+		    (++ "ERROR: while trying to open " 
+			(++ filename (cons #\newline message))))))
+    (pair (if flag stream nullstr) (pair flag message)))
+  :serial t)
+
+(defop (open_in_file filename) (open_file filename 1)
+  :documentation 
+"Opens a file for reading and returns a {\\tt stream} for that file
+along with an error flag and an error message.")
+
+(defop (open_out_file filename) (open_file filename 2)
+  :documentation
+"Opens a file for writing and returns a {\\tt stream} for that file
+along with an error flag and an error message.  File pointers cannot
+be returned to top-level.  They must be used within a single top-level
+call.")
+
+(defop (open_append_file filename) (open_file filename 3)
+  :documentation
+"Opens a file for appending and returns a {\\tt stream} for that file
+along with an error flag and an error message.")
+
+(defop (close_file str) (digest_err (prim_close_file str))
+  :serial t
+  :documentation
+"Closes a file given a {\\tt stream}.  It returns an error flag and
+an error message.")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; READING FROM A STREAM
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Status
+;; -1 if EOF
+;; -2 if max char
+;; othewise it is the delimiter
+(defop (prim_read_char delim maxlen str) 
+  ! (((pair (pair char int) (pair char bool)) <- char int (stream)))
+  (:primitive (FREAD_CHAR)))
+
+(defop (errcombine (pair astr aflag) b)
+  (if aflag b (pair astr aflag)))
+
+(defop (prim_read_scalar val str) 
+  ! (((pair alpha (pair char bool)) <- alpha (stream)) (alpha any))
+  (base-typecase alpha
+    (int (:primitive (POP 1 1) (FREAD INT)))
+    (float (:primitive (POP 1 1) (FREAD FLOAT)))
+    (bool (:primitive (POP 1 1) (FREAD BOOL)))
+    (char (with (((pair len e1) (prim_read_scalar 0 str))
+		 ((pair junk e2) (prim_read_char newline 1 str))
+		 ((vector s v) "")
+		 ((pair (pair result junk3) e3)
+		  (if (= (prim_length len) 1)
+		      (prim_read_char v len str)
+		    (pair (pair v 0) (pair v f)))))
+	    (pair result (errcombine e1 (errcombine e2 e3)))))
+    (function (pair val (pair #\space t)))))
+
+(defop (prim_read_segdes str) 
+  ! (((pair segdes (pair char bool)) <- (stream)))
+  (:primitive (FREAD SEGDES)))
+
+(defop (read_object_internal a str) 
+  ! (((pair alpha (pair char bool)) <- alpha (stream)) (alpha any))
+  (poly-typecase alpha
+    (prim_read_scalar a str)
+    (with (((vector seg val) a)
+	   ((pair rseg err1) (prim_read_segdes str))
+	   ((pair rval err2) (read_object_internal val str)))
+      (pair (vector rseg rval) (errcombine err1 err2)))
+    (with (((pair a1 a2) a)
+	   ((pair v1 err1) (read_object_internal a1 str))
+	   ((pair v2 err2) (read_object_internal a2 str)))
+      (pair (pair v1 v2) (errcombine err1 err2))))
+  :serial t)
+
+(defop (read_object a stream)
+  (with (((pair val err) (read_object_internal a stream)))
+    (pair (if (rest err) val (identity val))
+	  (digest_err err))))
+
+(defop (read_string delim maxlen stream)
+  (with (((vector sdes flat_delim) delim)
+	 ((pair (pair val term) err) 
+	  (prim_read_char flat_delim maxlen stream)))
+    (pair (pair (prim_make_vect val) term) (digest_err err)))
+  :documentation
+"Reads a string from the stream {\\tt stream}.  It will read until
+one of the following is true (whichever comes first):
+\\\begin{enumerate}
+  \\item the end-of-file is reached,
+  \\item one of the characters in the character array {\\tt delim} is reached,
+  \\item {\\tt maxlen} characters have been read.
+\\\end{enumerate}
+If {\\tt maxlen} is negative, then it is considered to be infinity.
+The {\\tt delim} character array can be empty."
+)
+
+(defop (read_line stream) 
+  (with (((pair (pair val status) err) 
+	  (read_string (dist newline 1) -1 stream)))
+    (pair (pair val (= status -1)) err))
+  :documentation
+  "Reads all the characters in {\\tt stream} up to a newline or the
+end-of-file (whichever comes first).  The newline is consumed and not
+returned.  As well as returning the line, it returns a boolean flag
+indicating whether reading was terminated on a newline (f) or EOF
+(t).")
+
+(defop (read_word stream) 
+  (with (((pair (pair val status) err)
+	  (read_string  #v(#\space #\newline #\tab) -1 stream))
+	 (ret (if (= -1 status) (pair #\  t)
+		(pair (code_char status) f))))
+    (pair (pair val ret) err))
+  :documentation
+"Reads all the characters in {\\tt stream} up to a newline, space,
+tab or the end-of-file (whichever comes first).  The newline, space or
+tab is consumed and not returned.  
+As well as returning the line, it returns a (char,bool) pair that indicates
+on what character the word was terminated and whether it was terminated
+on a EOF (the bool is t).")
+
+(defop (read_char stream) 
+  (with (((pair (pair val status) (pair flag message))
+	  (read_string "" 1 stream)))
+    (if (not flag) (pair #\  (pair flag message))
+      (if (zerop (length val))
+	  (pair #\  (pair f "End of File."))
+	(pair (elt val 0) (pair t "")))))
+  :documentation
+  "Reads a character from {\\tt stream}.  If the end-of-file is reached,
+the null character is returned along with the success flag set
+to false.")
+
+(defop (read_int_seq stream)
+  (with (((pair val err) (read_object 0 stream)))
+    (pair (prim_make_vect val) err)))
+
+(defop (read_float_seq stream)
+  (with (((pair val err) (read_object 0.0 stream)))
+    (pair (prim_make_vect val) err)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; READING FROM A FILE
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defop (read_object_from_file object_type filename) 
+  (with ((stream (open_check (open_in_file filename))))
+    (if (eql stream nullstr)
+	(identity object_type)
+      (with ((val (read_check (read_object object_type stream)))
+	     (foo (close_check (close_file stream))))
+	    val)))
+  :documentation
+
+"Reads an object from a file.  The first argument is an object of the
+same type as the object to be read, and the second argument is a
+filename.  For example, the call
+  {\\tt read_object_from_file(0,\"/tmp/foo\")} 
+would read an integer from the file {\\tt /tmp/foo}, and 
+  {\\tt read_object_from_file([] int,\"/tmp/bar\")} 
+would read a vector of integers from the file {\\tt /tmp/foo}.  The
+object needs to have been stored using the function
+{\\tt write_object_to_file}."  )
+
+(defop (prim_read_file_variable object_type varname filename) 
+  (with (((pair stream (pair flag err_message)) (open_in_file filename)))
+    (if flag
+	(with ((val (read_check (read_object object_type stream)))
+	       (foo (close_check (close_file stream))))
+	  val)
+      (with 
+	 ((s1 (print_string "Error while trying to read the file variable: "))
+          (s2 (print_line varname))
+          (s3 (print_line "It was probably assigned on a different machine.")))
+       (identity object_type)))))
+
+(defop (read_int_seq_from_file filename)
+  (prim_make_vect (read_object_from_file 0 filename))
+  :documentation
+"Reads a sequence of integers from the file named {\\tt filename}.
+The file must start with a left parenthesis, contain the integers
+separated by either white spaces, newlines or tabs, and end with
+a right parenthesis.  For example:
+\\begin{verbatim}
+( 22 33 11
+10   14
+12 11 )
+\\end{verbatim}
+represents the sequence [22, 33, 11, 10, 14, 12, 11].")
+
+(defop (read_float_seq_from_file filename)
+  (prim_make_vect (read_object_from_file 0.0 filename))
+  :documentation
+"Reads a sequence of floats from the file named {\\tt filename}.  The
+file must start with a left parenthesis, contain the floats separated
+by either white spaces, newlines or tabs, and end with a right
+parenthesis.  The file may contain integers (no .); these will be
+coerced to floats.")
+
+(defop (read_string_from_file filename)
+  (with ((stream (open_check (open_in_file filename))))
+    (if (eql stream nullstr) ""
+      (with (((pair val status) (read_check (read_string "" -1 stream)))
+	     (foo (close_check (close_file stream))))
+	val)))
+  :documentation
+"Reads a whole file into a character string.")	
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; WRITING TO A STREAM
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defop (prim_write_char val stream) ! (((pair char bool) <- char (stream)))
+  (:primitive (FWRITE CHAR)))
+
+(defop (prim_write_scalar val stream) ! (((pair char bool) <- alpha (stream)) 
+				       (alpha any))
+  (base-typecase alpha
+    (int (:primitive (FWRITE INT)))
+    (float (:primitive (FWRITE FLOAT)))
+    (bool (:primitive (FWRITE BOOL)))
+    (char (with ((len (prim_write_scalar (prim_length val) stream)))
+	    (prim_write_char val stream)))
+    (function (pair #\space t))))
+
+;; :primitive (FWRITE INT)
+
+(defop (prim_write_segdes seg stream) 
+  ! (((pair char bool) <- segdes (stream)))
+  (:primitive (FWRITE SEGDES)))
+
+(defop (write_object_internal a stream) 
+  ! (((pair char bool) <- alpha (stream)) (alpha any))
+  (poly-typecase alpha
+     (prim_write_scalar a stream)
+     (with (((vector seg val) a))
+       (errcombine (prim_write_segdes seg stream)
+		   (write_object_internal val stream)))
+     (with (((pair a1 a2) a))
+       (errcombine (write_object_internal a1 stream)
+		   (write_object_internal a2 stream))))
+  :serial t)
+
+(defop (write_object a stream)
+  (digest_err (write_object_internal a stream)))
+
+(defop (write_char a stream)
+  (digest_err (prim_write_char a stream))
+  :documentation
+"Prints a character to the stream specified by {\\tt stream}.  
+It returns an error flag and error message.")
+
+(defop (write_string a stream)
+  (with (((vector seg vals) a)) (write_char vals stream))
+  :documentation
+"Prints a character string to the stream specified by {\\tt stream}.
+It returns an error flag and error message.")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; WRITING TO A FILE
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defop (write_object_to_file object filename)
+  (with ((stream (open_check (open_out_file filename))))
+    (if (eql stream nullstr) f
+	(with ((wc (write_check (write_object object stream)))
+	       (cc (close_check (close_file stream))))
+	      (and wc cc))))
+  :documentation
+"Writes an object to a file.  The first argument is the object and the
+second argument is a filename.  For example 
+  {\\tt write_object_to_file([2,3,1,0],\"/tmp/foo\")} 
+would write a vector of integers to the file {\\tt /tmp/foo}.
+The data is stored in an internal format and can only be read back
+using {\\tt read_object_from_file}.")
+
+(defop (file_write_string_internal a filename mode)
+  (with ((stream (open_check (open_file filename mode))))
+    (if (eql stream nullstr) f
+	(with ((wc (write_check (write_string a stream)))
+	       (cc (close_check (close_file stream))))
+	  (and wc cc)))))
+
+(defop (write_string_to_file a filename)
+  (file_write_string_internal a filename 2)
+  :documentation
+"Writes a character string to the file named {\\tt filename}.")
+
+(defop (append_string_to_file a filename)
+  (file_write_string_internal a filename 3)
+  :documentation
+"Appends a character string to the file named {\\tt filename}.")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; GENERATING STRINGS
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;
+;; BOOLS AND CHARS
+;;;;;;;;;;;;;;;
+
+(defop (bool_string v) ! ((v.char <- bool))
+  (if v "t" "f"))
+
+(defop (char_string v) ! ((v.char <- char))
+  (vpair #\` v))
+
+;;;;;;;;;;;;;;;
+;; INTEGERS
+;;;;;;;;;;;;;;;
+
+;;(set *hex_chars* "0123456789abcdef")
+;;(set zero_val (char_code #\0))
+
+(defop (digitp c) (and (>= c #\0) (<= c #\9)))
+
+(defop (positive_int_string a) ! ((v.char <- int))
+  (with ((len (+ 1 (floor (log (float a) 9.9999999999)))))
+    (reverse (over ((i (mult_scan (dist 10 len))))
+		   (code_char (+ (char_code #\0) (rem (/ a i) 10)))))))
+
+(defop (int_string v) ! ((v.char <- int))
+  (if (zerop v) "0" 
+    (if (plusp v)
+	(positive_int_string v)
+      (cons #\- (positive_int_string (abs v))))))
+
+;;;;;;;;;;;;;;;
+;; FLOATS
+;;;;;;;;;;;;;;;
+
+;; Strips the zeros on the right hand side of the decimal point.
+;; Always leaves at least one character (argument must be at least 1 char).
+(defop (strip_after_point str)
+  (with ((fl (reverse (v./= str v. #\0)))
+	 (fl (reverse (v.or fl (or_scan fl))))
+	 (fl (rep fl t 0)))
+    (pack (zip str fl))))
+
+(defop (prim_exp_string v) ! ((v.char <- int))
+  (if (zerop v) "+0" 
+    (if (plusp v)
+	(cons #\+ (positive_int_string v))
+      (cons #\- (positive_int_string (abs v))))))
+
+(defop (positive_float_string val float-len pos neg strip_p) 
+  (with ((exp (+ 1 (floor (log val 10.0))))
+	 (power (expt 10.0 (float (- float-len exp))))
+	 ;; The following will overflow if float-len > 9
+	 (str (positive_int_string (round (* val power))))
+	 ;; need to adjust if round adds a digit
+	 ((pair exp str) (if (> (length str) float-len)
+			     (pair (+ exp 1) (take str float-len))
+			   (pair exp str))))
+    (if (or (> exp pos) (< exp neg)) 
+	(++ (++ (take str 1) ".") 
+	    (++ (if strip_p (strip_after_point (drop str 1)) (drop str 1))
+		(cons #\e (prim_exp_string (- exp 1)))))
+      (if (< exp 1)
+	  (++ "0." (++ (dist #\0 (negate exp)) (strip_after_point str)))
+	(++ (++ (take str exp) ".")
+	    (strip_after_point (drop str exp)))))))
+
+(set *float-length* 8)
+
+(defop (float_string val) 
+  (if (zerop val) "0.0"
+    (if (plusp val)
+	(positive_float_string val *float-length* 7 -2 t)
+      (cons #\- (positive_float_string (abs val) *float-length* 7 -2 t)))))
+
+(defop (exp_string val digits_after_point)
+  (if (zerop val) "0.0"
+    (if (plusp val)
+	(positive_float_string val (+ 1 digits_after_point) 0 1 f)
+      (cons #\- (positive_float_string (abs val) 
+				       (+ 1 digits_after_point)
+				       0 1 f))))
+  :argcheck ((> digits_after_point 8)
+	     "In function exp_string, digits_after_point is too large.")
+  :documentation
+  "Prints a floating-point number in exponential notation.  The second
+argument specifies how many digits should be printed after the decimal
+point (currently this cannot be larger than 8).")
+
+;;;;;;;;;;;;;;;
+;; VECTORS
+;;;;;;;;;;;;;;;
+
+(defop (vector_string vect) ! ((v.char <- v.v.char))
+  (if (= (length vect) 0) "[]"
+     (++ (++ "[" (drop (flatten (v.++ v.", " vect)) 2)) "]")))
+
+(defop (scalar_string v) ! ((v.char <- alpha) (alpha any))
+  (base-typecase alpha
+    (int (int_string v))
+    (float (float_string v))
+    (char (char_string v))
+    (bool (bool_string v))
+    (function "function")))
+
+;; STUB
+(defop (string v) ! ((v.char <- alpha) (alpha any)) :stub)
+
+(defop (string_noparen v) ! ((v.char <- alpha) (alpha any))
+  (poly-typecase alpha
+    (scalar_string v)
+    (vector_string (v.string v))
+    (with (((pair v1 v2) v))
+      (++ (string v1) (++ ", " (string v2))))))
+
+(defop (string v) ! ((v.char <- alpha) (alpha any))
+  (poly-typecase alpha
+    (scalar_string v)
+    (vector_string (v.string v))
+    (with (((pair v1 v2) v))
+      (++ "(" (++ (string v1) (++ ", " (++ (string_noparen v2) ")"))))))
+  :documentation 
+  "Given any printable object {\\tt v}, {\\tt @} converts it into
+its printable representation as a character string."
+  :infix @)
+
+(defop (|\|\|| str l) 
+  (if (< (length str) (abs l))
+      (if (plusp l)
+	  (++ str (dist #\space (- l (length str))))
+	(++ (dist #\space (- (abs l) (length str))) str))
+    str)
+  :documentation
+  "Pads a string {\\tt str} into a string of length {\\tt l} with
+the string left justified.  If {\\tt l} is negative, then the
+string is right justified."
+  :infix |\|\||
+  :name pad-string)
+
+(defop (@ v) ! ((v.char <- alpha) (alpha any))
+  (string v)
+  :documentation 
+  "Given any printable object {\\tt v}, {\\tt @} converts it into
+its printable representation as a character string."
+  :infix @
+  :name mk-string)
+
+;;;;;;;;;;;;;;
+;;;;;;; ABBREVIATED STRINGS
+;;;;;;;;;;;;;;;
+
+(set trace_string_length 5 
+     :documentation 
+     "The number of elements printed in a sequence during tracing."
+     :redefine on)
+
+(set trace_string_depth 3
+     :documentation 
+     "The number of levels printed in a sequence during tracing."
+     :redefine on)
+
+(defop (abrev_string_paren v depth) ! ((v.char <- alpha int) (alpha any)) 
+  :stub)
+
+(defop (vector_abrev_string vect depth)
+  (if (= depth 0) "**"
+    (vector_string 
+     (if (<= (length vect) trace_string_length) 
+	 (v.abrev_string_paren vect v.(- depth 1))
+       (snoc 
+	(v.abrev_string_paren (take vect trace_string_length) v.(- depth 1)) 
+	"...")))))
+
+(defop (abrev_string_noparen v depth) ! ((v.char <- alpha int) (alpha any))
+  (poly-typecase alpha
+    (scalar_string v)
+    (vector_abrev_string v depth)
+    (with (((pair v1 v2) v))
+      (++ (abrev_string_paren v1 depth) 
+	  (++ ", " (abrev_string_paren v2 depth))))))
+
+(defop (abrev_string_paren v depth) ! ((v.char <- alpha int) (alpha any))
+  (poly-typecase alpha
+    (scalar_string v)
+    (vector_abrev_string v depth)
+    (with (((pair v1 v2) v))
+      (++ "(" (++ (abrev_string_paren v1 depth) 
+		  (++ ", " (++ (abrev_string_noparen v2 depth) ")")))))))
+
+(defop (abrev_string v)
+  (abrev_string_paren v trace_string_depth))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; PRETTY PRINTING OBJECTS TO STDOUT
+;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; This prints an object followed by a space.
+(defop (print v) ! ((alpha <- alpha) (alpha any))
+  (with ((temp (print_string (snoc (string v) #\space))))
+    v)
+  :documentation
+"Given any printable object {\\tt v}, {\\tt print} converts it into
+its printable representation and prints it to standard output")
+
+;; Same as print, but followed by a newline instead of a space.
+(defop (printl v) ! ((alpha <- alpha) (alpha any))
+  (with ((temp (print_string (snoc (string v) #\newline))))
+    v)
+  :documentation
+"Same as {\\tt print}, but includes a Newline character at the end.")
+
+(defop (print_debug str v) ! ((alpha <- v.char alpha) (alpha any))
+  (with ((temp (print_string (++ str (snoc (string v) #\newline)))))
+    v)
+  :documentation
+"Prints the character string {\\tt str} followed by the string
+representation of the object {\\tt v}, and then a newline to standard
+output.  
+This function can be useful when debugging.")
+
+(defop (print_trace var val)
+  (with ((temp (print_line (++ var (abrev_string val)))))
+    val))
+
+;;;;;;;;;;;;;
+;;; ERROR MESSAGES
+;;;;;;;;;;;;
+
+(defop (error string)
+  (with ((message (print_line (++ "ERROR: " string)))
+	 (exit (prim-exit 0)))
+    t))
+
+;;;;;;;;;;;;;
+;;; CODE FOR SPAWNING SUBTASKS
+;;;;;;;;;;;;
+
+#|
+Jay Sipelstein (Sept 17, 1992)
+
+I've added the SPAWN command to VCODE.  Here's the description of the
+function from the source:
+
+/* do_spawn() : This allows VCODE to communicate with other C processes.
+ * The SPAWN command takes 4 args from the stack:
+ *    execution string - a string that will be passed to execvp
+ *    in_fd -  a file descriptor -  stdin of new process
+ *    out_fd - a file descriptor -  stdout of new process
+ *    err_fd - a file descriptor -  stderr of new process
+ * Any of these arguments may be the NULL_STREAM, in which case,
+ * new streams are created.
+ * The command returns three file descriptors, a boolean status flag
+ * and an error message.
+ */
+In other words:
+
+SPAWN: string * int * int * int ---> bool * string * int * int * int
+      executable  file_descriptors   status  err_msg    file_descriptors
+|#
+
+(defop (prim_spawn a b c d) 
+  ! ((pair (pair (stream) (pair (stream) (stream))) (pair char bool))
+     <- char (stream) (stream) (stream))
+  (:primitive (SPAWN)))
+
+(defop (shell_check val flag err_message)
+  (if flag val
+    (with ((s1 (print_line "ERROR while trying to execute a shell command:"))
+	   (s2 (print_line err_message)))
+	  (identity val))))
+
+(defop (spawn command stdin stdout stderr)
+  (with (((vector s v) command)
+	 ((pair (pair ostderr (pair ostdout ostdin)) (pair errstring flag))
+	  (prim_spawn v stdin stdout stderr))
+	 (str (prim_make_vect errstring)))
+    (pair (pair ostdin (pair ostdout ostderr)) (pair flag str)))
+  :documentation
+  "Creates a subprocess (using unix fork).  The {\\tt spawn} function
+takes 4 arguments:
+
+\\begin{itemize}
+  \\item execution string - a string that will be passed to execvp
+  \\item input stream - a stream descriptor -  stdin of new process
+  \\item output stream - a stream descriptor -  stdout of new process
+  \\item error stream - a stream descriptor -  stderr of new process
+\\end{itemize}
+
+The function returns three file descriptors a boolean status flag and
+an error message: ((stdin, stdout, stderr), (flag, message)).  For any
+non null stream passed to spawn, spawn will return the same stream and
+use that stream as stdin, stdout or stderr.  If the null stream is
+passed for any of the three stream arguments, then spawn will create a
+new stream and pass back a pointer to it.")
+
+(defop (shell_command name input)
+  (with (((pair instr (pair outstr ignore))
+	  (shell_check (spawn name nullstr nullstr stderr)))
+	 (foo (if (= (length input) 0) t
+		(write_check (write_string input instr))))
+	 (foo (close_check (close_file instr)))
+	 (result (first (read_check (read_string "" -1 outstr))))
+	 (foo (close_check (close_file outstr))))
+    result)
+  :documentation
+"Executes the shell command given by {\\tt name}.  If the second argument
+is not the empty string, then it is passed to the shell command as standard
+input.  The {\\tt shell_command} function returns its standard output
+as a string.  For example, the command {\\tt shell_command(\"cat\",\"dog\")}
+would return {\\tt \"dog\"}."
+)
+  
+(defop (get_environment_variable name)
+  (with ((foo (shell_command (++ "printenv " name) ""))
+	 (l (length foo)))
+    (if (plusp l) (take foo (- l 1)) foo))
+  :documentation
+  "Gets the value of an environment variable.  Will return the empty
+string if there is no such variable.")
+
+;;;;;;;;;;;;;;;;;;
+
+(defop (prim_write_scalar2 val stream) ! ((bool <- alpha (stream)) 
+					  (alpha any))
+  (base-typecase alpha
+    (int (:primitive (FWRITE INT) (POP 1 1)))
+    (float  (:primitive (FWRITE FLOAT) (POP 1 1)))
+    (bool (:primitive (FWRITE BOOL)  (POP 1 1)))
+    (char (:primitive (FWRITE INT) (POP 1 1)))
+    (function t)))
+
+(defop (prim_write_segdes2 seg stream) 
+  ! ((bool <- segdes (stream)))
+  (:primitive (FWRITE SEGDES) (POP 1 1)))
+
+(defop (write_object_int2 a stream) 
+  ! ((bool <- alpha (stream)) (alpha any))
+  (poly-typecase alpha
+     (prim_write_scalar2 a stream)
+     (with (((vector seg val) a))
+       (or (prim_write_segdes2 seg stream)
+	   (write_object_int2 val stream)))
+     (with (((pair a1 a2) a))
+       (or (write_object_int2 a1 stream)
+	   (write_object_int2 a2 stream)))))
+
+(defop (extzero a)  ! ((int <- int))
+  (:primitive (CONST INT 0) (COPY 1 1) (LENGTH INT) (MAKE_SEGDES) 
+	      (EXTRACT INT)))
+
+(defop (prim_write_object a (stream istr))
+  (if t
+      (write_object_int2 (pair (prim_length istr) a) (stream (extzero istr)))
+    t))
+
+(defop (write_first_int a (stream istr))
+  (if t
+      (write_object_int2 (extzero a) (stream (extzero istr)))
+    t))

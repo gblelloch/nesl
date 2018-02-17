@@ -1,0 +1,47 @@
+
+function sparse_MxV(mat,vect) = 
+   {sum({val * vect[i] : (i,val) in row}): row in mat} $
+
+% Each Jabobi iteration is just a matrix vector product,
+  this will just repeat it n times. %
+function Jacobi_Iterate(Mat,vect,n) =
+  if (n == 0) then vect
+  else Jacobi_Iterate(Mat,sparse_MxV(Mat,vect),n-1) $
+
+% THE FOLLOWING TWO FUNCTIONS ARE MESH SPECIFIC AND ONLY GET
+  CALLED ONCE TO INITIALIZE THE MESH AND VECTOR %
+
+function make_2d_n_by_n_mesh(n) =
+  let 
+    % A sequence of indices of the internal cells. %
+    internal_ids = flatten({{i + n*j: j in [1:n-1]}: i in [1:n-1]});
+
+    % Creates a matrix row for each internal cell.
+      Each row points left, right, up and down with weight .25 %
+    internal = {(i,[((i+1), .25), ((i-1), .25), 
+                    ((i+n), .25), ((i-n), .25)]): 
+                 i in internal_ids};
+
+    % Creates a default matrix row (used for boundaries).
+      Each points to itself with weight 1 %
+    default = {[(i,1.0)]: i in [0:n^2]}
+
+  % Insert internal cells into defaults %
+  in default <- internal $
+
+% Assumes mesh is layed out in row major order %
+function make_snyders_initial_vector(n) =
+  dist(0.0,n^2) <- { i, 50.0: i in [n^2-n:n^2]} $
+
+% TESTS IF IT WORKS %
+function test(n, steps) =
+let matrix = make_2d_n_by_n_mesh(n);
+    vector = make_snyders_initial_vector(n);
+in Jacobi_Iterate(matrix,vector,steps) $
+
+% REDEFINED %
+
+function sparse_MxV(mat,vect) = 
+let l = {#row: row in mat};
+    i,v = unzip(flatten(mat))
+in {sum(row): row in partition({x*v: x in vect->i; v},l)} $

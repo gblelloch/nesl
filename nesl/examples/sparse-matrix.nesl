@@ -1,0 +1,12 @@
+
+
+function pack_matrix(a) =
+let idx,vals = unzip(flatten(a));
+in idx,vals,{make_segdes(#row): row in a} $
+
+function matvec(a,x) =
+let idx,vals,lens = a;
+    newvals = {vals*g:vals;g in x->idx}
+in {sum(row): row in nest(newvals,lens)} $
+
+

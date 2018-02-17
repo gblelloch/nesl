@@ -1,0 +1,5 @@
+function my_sum(a) =
+if (#a == 1) then a[0]
+else 
+  let r = {my_sum(v) : v in bottop(a)};
+  in r[0] + r[1];

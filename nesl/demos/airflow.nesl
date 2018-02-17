@@ -1,0 +1,399 @@
+load "/afs/cs.cmu.edu/project/scandal/nesl/examples/delaunay"; 
+
+% ************************************* %
+% FUNCTIONS FOR MANIPULATING THE WINDOW %
+% ************************************* %
+
+% This datatype describes the current state of the window %
+datatype wstate(w_window,
+		% The bounding boxes for different zoom levels %
+		[((float,float),(float,float))],
+
+		% The points and their values %
+		[(float,(float,float))],
+
+		% The segments drawn on the window along with their color
+		  and width %
+		[([((float,float),(float,float))],int,int)],
+
+		% The arrows drawn on the window along with their color %
+		[((float,float),(float,float))],int);
+
+function empty_window_state(win,bounding_box) =
+let
+    segs = [] ([((float,float),(float,float))],int,int);
+    arrows = ([] ((float,float),(float,float)),w_red);
+    wpoints = [] (float,(float,float));
+    box = w_get_named_box("mesh",win);
+    ignore = w_clear_box(box);
+in wstate(win,[bounding_box],wpoints,segs,arrows) $
+
+function add_segments(segs,width,color,window_state) =
+let
+    wstate(win,bbox,pts,seg_list,alist) = window_state;
+    box = w_get_named_box("mesh",win);
+    foo = w_clip_and_draw_segments(segs,width,color,box);
+    seg_list = seg_list++[(segs,width,color)];
+in wstate(win,bbox,pts,seg_list,alist) $
+
+function add_arrows(arrows,color,window_state) =
+let
+    wstate(win,bbox,pts,seg_list,alist) = window_state;
+    box = w_get_named_box("mesh",win);
+    scale = w_box_scale(box);
+    scale = (5./max_val({sqrt(xg^2+yg^2): (x0,y0),(xg,yg) in arrows}))/scale;
+    arrows = {let xd,yd = xg*scale,yg*scale 
+              in (x0-xd,y0-yd),(x0+xd,y0+yd)
+	      : (x0,y0),(xg,yg) in arrows};
+    ignore = {w_draw_arrow(arrow,1,(7,5),color,box): arrow in arrows};
+in wstate(win,bbox,pts,seg_list,(arrows,color)) $
+
+function add_points(points,window_state) =
+let
+    wstate(win,bbox,pts,seg_list,alist) = window_state;
+    box = w_get_named_box("mesh",win);
+    ignore = {w_draw_big_point(pt,5,round(x*62.),box): (x,pt) in points};
+in wstate(win,bbox,points,seg_list,alist) $
+
+function draw_triangles(triangles,window_state) =
+let
+    wstate(win,bbox,pts,seg_list,alist) = window_state;
+    box = w_get_named_box("mesh",win);
+    ignore = {w_shade_polygon(poly,w_yellow,box): poly in triangles};
+in window_state $
+
+% Redraws the current window using the bounding box at the top
+  of the list of bounding boxes %
+function draw(window_state) =
+let
+    wstate(win,bboxes,points,seg_list,(arrows,acol)) = window_state;
+    box = w_get_named_box("mesh",win);
+    win,box = w_reset_box_size("mesh",bboxes[0],win);
+    ignore = w_clear_box(box);
+    ignore = {w_clip_and_draw_segments(segs,w,c,box) : (segs,w,c) in seg_list};
+    ignore = {w_draw_big_point(pt,5,round(x*62.),box): (x,pt) in points};
+    ignore = {w_draw_arrow(arrow,1,(7,5),acol,box): arrow in arrows};
+in wstate(win,bboxes,points,seg_list,(arrows,acol)) $
+
+function write_note(str,window_state) =
+let wstate(win,rest) = window_state;
+in w_write_paragraph(str,w_black,w_get_named_box("note",win)) $
+
+function write_help(str,window_state) =
+let wstate(win,rest) = window_state;
+in w_write_paragraph(str,w_black,w_get_named_box("help",win)) $
+
+function nobox(pt,(d,h)) = (d == 0.0) or (h == 0.0) $
+
+function get_zoom_box(pt,window_state) =
+let
+    wstate(win,topbox,rest) = window_state;
+    box = w_get_named_box("mesh",win);
+in w_get_zoom_box(pt,2,box) $
+
+function find_point((x0,y0),points) =
+  min_index({(x0-x)^2+(y0-y)^2 : (v,(x,y)) in points}) $
+
+function zoom_loop(window_state) =
+let 
+    wstate(win,bound_boxes,points,segs,arrows) = window_state;
+    type,name,pt,(state,button),ch = w_get_input(win);
+in
+    % QUIT %
+    if (eql(type,"button") and eql(name,"quit")) or (ch==`q) then 
+	f,window_state
+
+    % STEP %
+    else if (eql(type,"button") and eql(name,"step")) then 
+	t,window_state
+
+    %else if eql(type,"click") and (button == 1) then
+	let foo = print_line(@find_point(pt,points));
+	in zoom_loop(window_state)%
+
+    % ZOOM IN ON MIDDLE BUTTON CLICK %
+    else if eql(type,"click") and (button == 2) then
+	let zbox = get_zoom_box(pt,window_state);
+	in if nobox(zbox) then zoom_loop(window_state)
+	   else zoom_loop(draw(wstate(win,[zbox]++bound_boxes,points,segs,
+				      arrows)))
+
+
+    % ZOOM OUT %
+    else if (eql(type,"button") and eql(name,"zoom up")) then
+        let window_state= if #bound_boxes == 1 then window_state
+                         else draw(wstate(win,drop(bound_boxes,1),points,segs,
+					  arrows))
+	in zoom_loop(window_state)
+
+    else zoom_loop(window_state) $
+
+function wait_for_step(window_state) =
+let
+    foo = write_help("Use the middle button to Zoom In: Press and Drag",
+		     window_state);
+    fl,window_state = zoom_loop(window_state);
+    foo = write_help("Hold on, Working...",window_state);
+in fl,window_state $
+
+
+% ************************************* %
+% FUNCTIONS FOR CONJUGATE GRADIENT      %
+% ************************************* %
+
+function sparse_mvmult(a,x) =
+let ids,vals = unzip(flatten(a));
+    newvals = {vals*g:vals;g in x->ids}
+in {sum(row): row in partition(newvals,{#a:a})} $
+
+function DOTP(x,y) = sum({x*y:x;y}) $
+
+function CGSOL_LOOP(a,(p,x,r,rho),i) =
+if (i == 0) then (p,x,r,rho)
+else
+let 
+    q = sparse_mvmult(a, p);
+    alpha = rho/dotp(p,q);
+    x = {x + alpha * p:x;p};
+    rho0 = rho;
+    r = {r - alpha * q:r;q};
+    rho = dotp(r,r);
+    beta = rho/rho0;
+    p = {beta*p + r:p;r}
+in cgsol_loop(a,(p,x,r,rho),i-1) $
+
+function CGSOLINIT(a,b) =
+let 
+    x = dist(0.0,#b);
+    rho = dotp(b,b);
+    p = b;
+    r = b;
+in p,x,r,rho $
+
+function scale_values(x) =
+let
+    minv = min_val(x);
+    maxv = max_val(x)+1e-10;
+    diff = maxv-minv;
+in {(x-minv)/diff: x in x} $
+
+function multisolve(a,b,xx,i,n,j,points,window_state) =
+if i == n then window_state,first(rest(xx))
+else
+    let
+	nxx = cgsol_loop(a,xx,j);
+	(p,x,r,rho) = nxx;
+	vals = scale_values(x);
+	window_state = add_points(zip(vals,points), window_state);
+    in multisolve(a,b,nxx,i+1,n,j,points,window_state) $
+
+% ************************************* %
+% FUNCTIONS FOR SETTING UP THE MATRIX   %
+% ************************************* %
+
+function seglength((x0,y0),(x1,y1)) = sqrt((x0-x1)^2 + (y0-y1)^2) $
+
+function cell_equation(i,p0,pts,cell) =
+let
+    vals = {j,seglength(seg)/seglength(p0,pt) 
+	    :(j,fl),seg in cell; pt in pts};
+    row_sum = sum({v: i,v in vals});
+in vals++[(i,-row_sum)] $
+
+function generate_bs(boundary,points) =
+let
+    locs = points->boundary;
+    diffs = {y0-y1: (x0,y0) in locs; (x1,y1) in rotate(locs,-1)};
+    inflow = {(f1+f2)/2.0 : f1 in diffs; f2 in rotate(diffs,1)};
+    b = dist(0.0,#points)<-zip(boundary,inflow);
+    centers = {(x1+x0)/2.,(y1+y0)/2.
+	       : (x0,y0) in locs; (x1,y1) in rotate(locs,-1)};
+in b,centers $
+
+outside_boundary = 
+[4252, 4250, 4234, 4174, 3881, 3478, 1930, 1737, 1580, 1448, 1271, 830, 43, 8, 11, 6, 12, 3, 10, 7, 13, 4, 9, 2, 1, 0, 17, 27, 5, 18, 115, 1156, 1461, 1572, 1661, 1760, 2153, 3469, 4102, 4219, 4244, 4251, 4248, 4245, 4243, 4237, 4246, 4249, 4247, 4239, 4242];
+
+% ************************************* %
+% OTHER UTILITIES                       %
+% ************************************* %
+
+function get_from_edges(edges,v) =
+  {(e1,e2) : e1 in v->{e1: (e1,e2) in edges} ; 
+             e2 in v->{e2: (e1,e2) in edges} } $
+
+function get_from_triangles(triangles,v) =
+  {[e1,e2,e3] : e1 in v->{e1: (e1,e2,e3) in triangles} ; 
+                e2 in v->{e2: (e1,e2,e3) in triangles} ;
+                e3 in v->{e3: (e1,e2,e3) in triangles} } $
+
+function clean_segments(segs) =
+let
+    upsegs = {if x0 < x1 then ((x0,y0),(x1,y1)) else ((x1,y1),(x0,y0))
+	      : ((x0,y0),(x1,y1)) in segs};
+in remove_duplicates(upsegs) $
+
+function read_graph(graph) =
+let flat_points = read_float_seq_from_file(graph ++ ".nodes");
+    flat_edges  = read_int_seq_from_file(graph ++ ".edges");
+    points      = {a[0],a[1] : a in group_by(flat_points,2)};
+    edges       = {a[0],a[1] : a in group_by(flat_edges,2)}
+in (points,edges) $
+
+function solve_2((x1,y1,b1),(x2,y2,b2)) =
+let
+    denom = y2*x1 - y1*x2;
+    sx = (b1*y2 - b2*y1)/denom;
+    sy = -(b1*x2 - b2*x1)/denom;
+in sx,sy $
+
+function vals_2((x0,y0),(x1,y1),v0,v1) = (x1-x0),(y1-y0),(v1-v0) $
+
+function center3((x0,y0),(x1,y1),(x2,y2)) = (x0+x1+x2)/3.0,(y0+y1+y2)/3.0 $
+
+function gradient_from_triangle(vals,pts) =
+let
+    pt0,pt1,pt2 = pts[0],pts[1],pts[2];
+    v0,v1,v2 = vals[0],vals[1],vals[2];
+    gradient = solve_2(vals_2(pt0,pt1,v0,v1),vals_2(pt0,pt2,v0,v2));
+    center = center3(pt0,pt1,pt2);
+in center,gradient $
+
+% ************************************* %
+% THE MAIN PROGRAM                      %
+% ************************************* %
+
+function airflow_demo(ignore) =
+let
+    % Generate the window %
+    display = get_environment_variable("DISPLAY");
+    win = w_make_window(((50,0),(735,685)),"Fluid Flow",w_cyan,display);
+
+    graph_files =    nesl_path ++ "examples/airfoil";
+    (points,edges) = read_graph(graph_files);
+
+    bounding_box = w_bounding_box(points);
+    win,box = w_add_box(((110,120),(600,540)),bounding_box,"mesh",w_white,win);
+    win = w_add_button(((25,120),(60,30)),"quit",w_red,win);
+    win = w_add_button(((25,170),(60,30)),"zoom up",w_red,win);
+    win = w_add_button(((25,220),(60,30)),"step",w_red,win);
+    win,tbox = w_add_text_box(((25,32),(150,56)),"help",w_cyan,win);
+    win,tbox = w_add_text_box(((190,22),(520,76)),"note",w_white,win);
+
+    % INTRO %
+    window_state = empty_window_state(win,bounding_box);
+    ignore = write_note("
+This is an algorithm animation of using the control volume method to simulate
+fluid flow over a wing.  It first shows how to set up the linear equations
+and then solves them using Conjugate Gradient.@
+Any comments are welcome.",
+window_state);
+    window_state = add_segments(zip(points,points),1,w_dark_gray,window_state);
+    fl,window_state = wait_for_step(window_state);
+    in if not(fl) then w_kill_window(win) else let
+
+    % DELAUNAY TRIANGULATION %
+    window_state = empty_window_state(win,bounding_box);
+    ignore = write_note("
+First we generate the Delaunay triangulation of the set of points.",
+window_state);
+    delaunay = delaunay_from_edgelist(points,edges);
+    segs = get_from_edges(edges,points);
+    window_state = add_segments(segs,1,w_dark_gray,window_state);
+    fl,window_state = wait_for_step(window_state);
+    in if not(fl) then w_kill_window(win) else let
+
+    % VORONOI DIAGRAM %
+    ignore = write_note("Based on the Delaunay triangulation, we generate
+the Voronoi diagram of the points.  The Voronoi edges are clipped
+so they don't extend outside the boundaries.
+This clipping is important for the next step.",window_state);
+    voronoi = voronoi_edges_from_delaunay(points,delaunay);
+    segs = flatten({{seg: x,seg in cell}: cell in voronoi});
+    segs = clean_segments(segs);
+    window_state = add_segments(segs,1,w_blue,window_state);
+    fl,window_state = wait_for_step(window_state);
+    in if not(fl) then w_kill_window(win) else let
+
+    % SET UP EQUATIONS %
+    ignore = write_note("We generate a set of linear equations in
+terms of the Flow Potential at each node.  The equation for a node
+sets the net flow into its voronoi cell to zero.  
+This is done by estimating the flow through
+each Voronoi edge (green) to be the length of the edge times
+the gradient of the flow potential along its Delaunay
+edge (red).",window_state);
+    a = {cell_equation(i,x0,x1s,cell)
+	 : cell in voronoi
+	 ; x1s in nested_get(points,delaunay)
+	 ; i in [0:#voronoi]
+	 ; x0 in points};
+    example_point = 1349;
+    segs = get_from_edges({example_point,n: 
+			   n in delaunay[example_point]},points);
+    window_state = add_segments(segs,4,w_red,window_state);
+    segs = {seg: x,seg in voronoi[example_point]};
+    window_state = add_segments(segs,4,w_green,window_state);
+    fl,window_state = wait_for_step(window_state);
+    in if not(fl) then w_kill_window(win) else let
+
+    % SET UP BOUNDARY CONDITIONS %
+    ignore = write_note("For the boundary cells we set 
+the flow into the cell to be proportional to the component of 
+its boundary edges perpendicular to the X axis.@
+We also set the potential at one boundary node to 0 so that we have
+a reference value (the black point on the upper right).",window_state);
+    segs = get_from_edges({i,j: i in outside_boundary; 
+			   j in rotate(outside_boundary,1)},points);
+    b,arrows = generate_bs(outside_boundary,points);
+    sink_point = max_val(outside_boundary);
+    a = rep(a,[(sink_point,1.0)],sink_point);
+    b = rep(b,0.0,sink_point);
+    arrows = {center,(.06,0.): center in arrows};
+    window_state = add_segments(segs,2,w_green,window_state);
+    window_state = add_arrows(arrows,w_red,window_state);
+    window_state = add_points([(0.0,points[sink_point])],window_state);
+    fl,window_state = wait_for_step(window_state);
+    in if not(fl) then w_kill_window(win) else let
+
+    % SOLVE THE EQUATIONS USING CONJUGATE GRADIENT %
+    ignore = write_note("We now solve the linear equations using the
+Conjugate Gradient iterative method.  The colors represent the Flow
+Potential and the flow velocity is the gradient of this potential.
+Each pass represents 150 iterations of the Conjugate Gradient method.",
+window_state);
+    segs = get_from_edges(edges,points);
+    window_state = empty_window_state(win,bounding_box);
+    window_state = add_segments(segs,1,w_dark_gray,window_state);
+    xx = cgsolinit(a,b);
+    window_state,x = multisolve(a,b,xx,0,3,150,points,window_state);
+    fl,Window_state = wait_for_step(window_state);
+    in if not(fl) then w_kill_window(win) else let
+
+    % SHOW FLOWS %
+    ignore = write_note("We now generate the flow amplitude and direction
+for each Delaunay triangle.  This is done by approximating the gradient
+of the flow potential at the center of the triangle by looking 
+at the value of the potential at the three corners.  The length of the
+arrows represent the amplitude.",window_state);
+    segs = get_from_edges(edges,points);
+    window_state = empty_window_state(win,bounding_box);
+    window_state = add_segments(segs,1,w_dark_gray,window_state);
+    triangles = delaunay_triangles_from_edges(delaunay);
+    arrows = {gradient_from_triangle(v,p): 
+	      v in get_from_triangles(triangles,x);
+	      p in get_from_triangles(triangles,points)};
+    window_state = add_arrows(arrows,w_purple,window_state);
+    fl,Window_state = wait_for_step(window_state);
+    in if not(fl) then w_kill_window(win) else let
+
+    % END OF DEMO %
+    ignore = write_note("The demo is done: the next step will quit.",
+			window_state);
+    fl,Window_state = wait_for_step(window_state);
+
+in w_kill_window(win) $
+
+%
+set arg_check off;
+dump vcode "/afs/cs/project/scandal/fun/src/airflow.vcode" airflow_demo(0);
+%

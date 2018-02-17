@@ -1,0 +1,60 @@
+% ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; %
+%   QUICKSORT                     %
+% ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; %
+
+function qsort(a) =
+if (#a < 2) then a
+else
+  let pivot   = a[#a/2];
+      lesser  = {e in a| e < pivot};
+      equal   = {e in a| e == pivot};
+      greater = {e in a| e > pivot};
+      result  = {qsort(v): v in [lesser,greater]};
+  in result[0] ++ equal ++ result[1] $
+
+% ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; %
+%   BATCHER'S BITONIC SORT        %
+%     W = O(n \lg^2 n)            %
+%     S = O(\lg^2 n)              %
+% ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; %
+
+function bitonic_sort(a) =
+if (#a == 1) then a
+else
+    let
+	bot = subseq(a,0,#a/2);
+	top = subseq(a,#a/2,#a);
+	mins = {min(bot,top):bot;top};
+	maxs = {max(bot,top):bot;top};
+    in flatten({bitonic_sort(x) : x in [mins,maxs]}) $
+
+function batcher_sort(a) =
+if (#a == 1) then a
+else
+    let b = {batcher_sort(x) : x in bottop(a)};
+    in bitonic_sort(b[0]++reverse(b[1])) $
+
+% ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; %
+%   BATCHER'S ODD-EVEN MERGESORT  %
+%     W = O(n \lg^2 n)            %
+%     S = O(\lg^2 n)              %
+% ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; %
+
+%  The length of A and B must be equal and a power of 2 %
+function odd_even_merge(a,b) =
+if (#a > 1)
+then
+    let b = {odd_even_merge(a,b)
+	     : a in [odd_elts(a),even_elts(a)]
+	     ; b in [odd_elts(b),even_elts(b)]};
+        odd, even = b[0],b[1]
+    in interleave({min(odd,even):odd;even},{max(odd,even):odd;even})
+else
+    if (a[0] < b[0]) then a++b else b++a $
+
+% The length of a must be a power of 2. %
+function odd_even_merge_sort(a) =
+if (#a == 1) then a
+else
+    let b = {odd_even_merge_sort(x) : x in bottop(a)};
+    in odd_even_merge(b[0],b[1]) $

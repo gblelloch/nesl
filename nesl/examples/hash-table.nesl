@@ -1,0 +1,186 @@
+%;;;;;;;;;;;;;;;;;;;;;;;;;
+This file implements a parallel hash table using quadratic probing.
+The user routines in this file are:
+
+  make_table(type,maxsize) -- create a table of a given maximum size
+  table_entries(table)     -- return all the entries of a table
+  insert_table(key_value_pairs,table) -- insert a sequence of elements
+                                         into a table based on keys
+  create_table(key_value_pairs) -- make a table and insert a sequence 
+                                   of elements into it.
+  search_table(keys,table) -- search a table based on a sequence of keys, and
+                              return a flag and associated values if found
+  fast_create_table -- a faster version of create_table
+;;;;;;;;;;;;;;;;;;;;;;;;;%
+
+% 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; MAKING AND EXAMINING A TABLE
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+%
+
+% The hashtable datatype 
+  A table will consist of a sequence of (flag,key,value) triples.
+  The flag is used to nonempty entries %
+datatype hashtable([(bool,a,b)]) :: (a in any; b in any) $
+
+% Creates a table that contains objects of the same type as the
+  type argument.  No more than maxsize elements should be inserted into
+  this table. %
+function make_table(type,maxsize) =
+   % 3 is picked to minimize the number of collisions %
+   hashtable(dist((f,identity(type)),3*maxsize-1)) $
+
+% Returns all the entries of a table. %
+function table_entries(table) =
+let
+    hashtable(table) = table;
+in {(key,val): (flag,key,val) in table | flag} $    
+
+% 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; INSERTION INTO A TABLE
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+%
+
+%The main loop of hash table insertion.  It tries to insert a set of values
+ at location hash+i^2 where i is the iteration, and hash is a previously
+ computed hash function for each value.
+ The arguments are:
+    hkv   -- a sequence of (hash,key,value) triples, each to be inserted 
+             into the table
+    i     -- the iteration, incremented by 1 on each recursive call
+    table -- the table being inserted into, consists of a sequence
+             of (flag,key,value) triples.  If the flag is set, then that
+             position is full.
+ result -- a new hash table with all the key,value pairs inserted.
+%
+function insert_internal(hkv,i,table) =
+if #hkv == 0 then table
+else
+  let 
+      len = #table;
+
+      % For each element calculate the position to try to insert %
+      positions = {rem(h + i^2,len) : (h,k,v) in hkv};
+
+      % Check if position is already occupied %
+      is_occupied = {flag:(flag,key,val) in table}->positions;
+
+      % If not occupied, insert (true,key,value) at the position %
+      new_table = table<-{(position,(t,key,value))
+			  : position in positions
+			  ; (h,key,value) in hkv ; is_occupied
+			  | not(is_occupied)};
+
+      % Since there could have been a collision with someone else that was
+        trying to insert, read the key back to make sure it matches with yours%
+      new_keys = {key:(flag,key,value) in new_table}->positions;
+      
+      % Pack out the (hash,key,value) pairs that where successfully inserted %
+      new_hkv = {(hash,key,value) in hkv
+		 ; is_occupied ; new_key in new_keys
+		 | is_occupied or not(eql(key,new_key))}
+  in insert_internal(new_hkv, i+1, new_table) $
+
+% Inserts a sequence of (key,value) pairs into a table. %
+function insert_table(key_value_pairs,table) =
+  let 
+      hashtable(table) = table;
+      len = #table;
+      
+      % tag a hash value onto each (key,value) pair %
+      hkv = {hash(key,len),key,value:  (key,value) in key_value_pairs}
+
+  % Call insert_internal, starting with iteration 0 %
+  in hashtable(insert_internal(hkv,0,table)) $
+
+% Create a table initialized with the (key,value) pairs passed in %
+function create_table(key_value_pairs) =
+let table = make_table(key_value_pairs[0],#key_value_pairs)
+in insert_table(key_value_pairs,table) $
+
+% 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; SEARCHING A TABLE
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+%
+
+% Main loop for searching a table.  The keys is searched for at
+  position hash+i^2, where i is the iteration and hash it the hash
+  value for each key.
+  The inputs are:
+    hk    -- a sequence of (hash,key) pairs, each key is being searched for
+    i     -- the iteration, incremented by 1 on each recursive call
+    table -- the hash table.  A sequence of (flag,key,value) triples.
+  Result -- sequence of (value,flag) pairs for each input triple.
+            If flag is true, then the key was found with the given value
+%
+function search_internal(hk,i,table) =
+if #hk == 0 then identity({v,t: fl,nk,v in table})
+else
+  let 
+      len = #table;
+      
+      % For each element calculate the position to fetch from %
+      positions = {rem(h + i^2,len) : (h,k) in hk};
+
+      % Get table entries from positions to see if keys match %
+      entries = table->positions;
+
+      % Exctract subfields %
+      occupied = {oc   : (oc,key,value) in entries};
+      keys     = {key  : (oc,key,value) in entries};
+      values   = {value: (oc,key,value) in entries};
+
+      % Check entry to see if keys match %
+      match = {eql(key,table_key): table_key in keys; (hash,key) in hk};
+
+      % Generate indices of collisions %
+      hit_indices = pack_index({not(match) and occupied: match; occupied});
+
+      % Recursively search table on hash_hits %
+      results = search_internal(hk->hit_indices,i+1,table)
+
+  % insert results back into sequence %      
+  in zip(values,occupied)<-{(i,r): i in hit_indices; r in results} $
+
+function search_table(keys,table) =
+let
+    hashtable(table) = table;
+    len = #table;
+    hk = {hash(key,len),key:  key in keys}   % tag hash values onto keys %
+in search_internal(hk,0,table) $
+
+% 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; FASTER ROUTINES FOR CREATE_TABLE
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+%
+
+% This is like insert_internal, but takes advantage of the fact that
+  the table starts out empty (it does not need to check if each
+  entry is occupied, and can therefore avoid passing the keys around. %
+function fast_insert_internal(hashvals,i,table) =
+if #hashvals == 0 then [] int
+else
+    let
+	len = #table;
+	positions = {rem(h + i^2,len) : h in hashvals};
+	is_full   = {id /= -1: id in table->positions};
+	indices   = [0:#positions];
+	new_table = table<-zip(positions,indices);
+	idx       = pack_index({i /= entry or is_full
+				: i in indices; is_full
+				; entry in new_table->positions});
+	results   = fast_insert_internal(hashvals->idx,i+1,new_table)
+in positions <- {(i,r): i in idx; r in results} $
+
+function fast_create_table(key_value_pairs) =
+let 
+    len = 3 * #key_value_pairs - 1;
+    h = {hash(key,len):  (key,value) in key_value_pairs};
+    pos = fast_insert_internal(h,0,dist(-1,len));
+    empty_table = dist((f,identity(key_value_pairs[0])),len);
+    table = empty_table <- {pos,(t,k,v): (k,v) in key_value_pairs; pos}
+in hashtable(table) $

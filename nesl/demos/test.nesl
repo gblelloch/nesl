@@ -1,0 +1,7 @@
+function test(foo) =
+let
+    bbox = ((0.,0.),(1.,1.));
+    w = w_make_window(((0,0),(500,500)),"test",w_white,display);
+    w,b = w_add_box(((100,100),(300,300)),bbox,"foo",w_black,w);
+    bar = w_clip_and_shade_polygon([(0.0,-.1),(.5,.5),(.7,.3),(.5,-.5),(.3,.1)],w_blue,b);
+in 0 $

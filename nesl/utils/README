@@ -1,0 +1,5 @@
+Need to be running X11 and install X11 tools, i.e. under ubuntu try:
+
+  sudo apt-get install libx11-dev
+
+Then make should work.

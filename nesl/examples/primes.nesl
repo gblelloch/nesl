@@ -1,0 +1,12 @@
+% Generates the primes up to n (not inclusive).
+  It works using a primes sieve algorithm, by first generating the primes
+  up to sqrt(n) and then using those to sieve the values up to n.
+  A full description of this algorithm is given in the Nesl manual. %
+function primes(n) =
+if n == 2 then [] int
+else 
+  let sqr_primes = primes(ceil(sqrt(float(n))));
+      sieves = {[2*p:n:p]: p in sqr_primes};
+      flat_sieves = flatten(sieves);
+      flags  = dist(t,n) <- {(i,f): i in flat_sieves};
+  in drop({i in [0:n]; flags | flags}, 2) ;

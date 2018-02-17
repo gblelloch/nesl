@@ -1,0 +1,15 @@
+Release of NESL with new C syntax
+
+New features (see manuals for more details):
+
+  New toplevel interface
+  Tracing
+  Profiling
+  Argument Checking
+  Higher order functions
+  Graphics functions
+  New I/O functions
+  More functions on sequences
+  User's manual
+  CM5 version available
+  File variables

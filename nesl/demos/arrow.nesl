@@ -1,0 +1,11 @@
+
+function foo(ignore) =
+let
+    win,err = xps_make_window(((50,0),(500,500)),"foo",display);
+    white= xps_white_pixel(win);
+    black= xps_black_pixel(win);
+    wh_gc = xps_line_gc(xps_func_copy,white,black,win);
+    bar = xps_draw_arrow(((100,100),(120,110)),0,1,10,7,wh_gc,win);
+    bar = xps_draw_arrow(((200,200),(200,220)),0,1,10,7,wh_gc,win);
+    bar = xps_draw_arrow(((200,200),(220,200)),0,1,10,7,wh_gc,win);
+in 0 $

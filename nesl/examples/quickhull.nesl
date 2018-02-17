@@ -1,0 +1,41 @@
+%
+This example finds the convex hull in 2 dimensions for a set of points.
+The algorithm is described in the NESL language definition.
+This file also includes a function, hull_demo(n), that picks approximately
+n random points in a circle, plots the points, finds the hull, and plots
+the hull.
+%
+
+function cross_product(o,line) =
+let (xo,yo) = o; 
+    ((x1,y1),(x2,y2)) = line;
+in (x1-xo)*(y2-yo) - (y1-yo)*(x2-xo);
+
+function hsplit(points,p1,p2) =
+let cross = {cross_product(p,(p1,p2)): p in points};
+    packed = {p in points; c in cross | plusp(c)};
+in if (#packed < 2) then [p1] ++ packed
+   else
+     let pm = points[max_index(cross)];
+     in flatten({hsplit(packed,p1,p2): p1 in [p1,pm]; p2 in [pm,p2]});
+
+function convex_hull(points) =
+let x = {x : (x,y) in points};
+    minx = points[min_index(x)];
+    maxx = points[max_index(x)];
+in hsplit(points,minx,maxx) ++ hsplit(points,maxx,minx);
+
+function random_points(n) =
+let m = round(float(n)*4.0/pi);
+    points = {rand(i) - 1.0, rand(i) - 1.0: i in dist(2.0,m)};
+in {x,y in points | x^2 + y^2 < 1.0} ;
+
+function hull_demo(n) =
+let points = random_points(n);
+    ignore = if (#points < 2) then error("Not enough points.") else f;
+    box =    bounding_box([(-1.0,-1.0),(1.0,1.0)]);
+    window = make_window(((200,100),(600,600)),box,"convex hull",display);
+    ignore = draw_points(points,window);
+    hull =   convex_hull(points);
+    ignore = draw_lines(hull ++ take(hull,1),1,window);
+in close_window(window);

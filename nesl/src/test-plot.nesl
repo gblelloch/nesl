@@ -1,0 +1,25 @@
+function input_loop(win,n) =
+if n == 0 then 0
+else let
+    input = w_get_input(win);
+    foo = print_string(@input);
+in input_loop(win,n-1) $
+
+function test_plot(_) =
+let
+    win = w_make_window(((0,0),(500,500)),"wombat",w_red,display);
+    win = w_add_button_stack(((20,20),(50,20),(0,30)),
+			     ["red","white","blue"],
+			     w_blue,win);
+    win = w_add_text((80,20),"hello world",w_yellow,win);
+    win,tbox = w_add_text_box(((80,40),(100,30)),"tbox",w_green,win);
+    win,dbox = w_add_box(((80,80),(400,400)),
+			 ((0.,0.),(1.,1.)),
+			 "plot box",
+			 w_black,win);
+    foo = input_loop(win,10);
+    bar = w_kill_window(win);
+in t $
+
+
+

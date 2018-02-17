@@ -1,0 +1,28 @@
+function randp(n) = 
+let p = {(rand(i)-1e4,rand(i)-1e4) : i in dist(2e4,n)};
+in {(x,y) in p | (x^2+y^2) < 1e8} $
+
+function test(n) =
+let a = randp(n);
+    w = make_window(defaultw(),bounding_box(a));
+    p = draw_points(a,w);
+    h = convex_hull(a);
+in draw_lines(h ++ [h[0]],w) $
+
+% Times (100000)
+
+  .75 -- empty recursive call
+  2.4 -- with cross
+  2.9 -- up to first pack
+  3.6 -- with max-index
+  5.5 -- with dist of packed (empty recursive call).
+
+Conclusion 
+   max_index = .4   * 2                     .8
+   max_index = .4   * 2 * 1 + 1 + 1        2.4
+   cross     = .9   * 2 * 1 + 1 + 1        5.4
+   pack      = .25  * 2 * 1 + 1 + 1        1.5
+   dist      = .9   * 2 *    .5 + .5       1.8
+                                          11.9
+
+%

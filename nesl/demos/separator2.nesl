@@ -1,0 +1,169 @@
+% 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+This example code is for a geometric separator.  It uses a K-d tree to
+recursively separate a graph into parts such that the number of edges
+cut by the partitions is minimized.  It works on graphs embended in
+any k-dimensional space.  The algorithm needs to know the locations of
+the vertices of the graph in the space.  The file also supplies a demo
+for a 2-dimensional graph of an airfoil.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+%
+
+% ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; %
+%   SPLITTING A GRAPH             %
+% ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; %
+
+function get_from_edges(edges,v) =
+  {(e1,e2) : e1 in v->{e1: (e1,e2) in edges} ; 
+             e2 in v->{e2: (e1,e2) in edges} } $
+
+
+function subselect_graph((nodes,edges),node_flags) =
+let
+    % Subselect edges for which both ends have their node flag set.
+      These are the edges that remain in the subselected graph. %
+    new_edges = {(e1,e2) in edges;
+		 (f1,f2) in get_from_edges(edges,node_flags) | f1 and f2};
+
+    % subselect the nodes %
+    new_nodes = {n in nodes; fl in node_flags | fl};
+
+    % Relabel the edges with the new node numbers %
+    new_edges = get_from_edges(new_edges,enumerate(node_flags));
+% return the new nodes and edges %
+in new_nodes,new_edges $
+
+% Subselect edges for which one end has a flag set and the other does not %
+function between_edges((nodes,edges),node_flags) =
+   {(e1,e2) in get_from_edges(edges,{a[0],a[1]: a in nodes});
+    (f1,f2) in get_from_edges(edges,node_flags) | f1 xor f2} $
+
+% Checks how many edges are cut by a partition along the 
+  specified coordinates %
+function quad_check_cut(coordinates,edges) =
+let median = median(coordinates);
+    flags = {x > median : x in coordinates};
+    number = count({e1 xor e2 : (e1,e2) in get_from_edges(edges,flags)});
+in (number,flags) $
+
+% This returns the partition along one of the dimensions that minimizes
+  the number of edges that are cut %
+function find_best_cut(points,edges) =
+let 
+    (c0,flags0) = quad_check_cut({p[0]: p in points},edges);
+    (c1,flags1) = quad_check_cut({p[1]: p in points},edges);
+in if c0 < c1 then flags0 else flags1;
+
+function separate_graph(graph,box) =
+let 
+    flags = find_best_cut(graph);
+    graph0 = subselect_graph(graph,flags);
+    graph1 = subselect_graph(graph,{not(fl): fl in flags});
+    edges_to_draw = between_edges(graph,flags);
+    foo           = w_clip_and_draw_segments(edges_to_draw,2,w_pink,box);
+in [graph0,graph1] $
+
+function draw_edges(points,edges,color,box) =
+  w_clip_and_draw_segments(get_from_edges(edges,{a[0],a[1]: a in points}),
+			   2,color,box) $
+
+function redraw_graph(box,data) =
+let 
+    foo = w_clear_box(box);
+    x = {draw_edges(p,e,rand(i),box): p,e in data; i in dist(64,#data)}
+in x $
+
+function reset_zoom(zbox,data,win,box1,box2) =
+let
+    win,box = w_reset_box_size("mesh",zbox,win);
+    foo = w_draw_rectangle(w_bounds_from_box(box1),1,w_xor,box2);
+    foo = w_draw_rectangle(w_bounds_from_box(box),1,w_xor,box2);
+    bar = redraw_graph(box,data);
+in win,box $
+
+function separator_loop(data,win,box1,box2) =
+let type,name,pt,(state,button),ch = w_get_input(win);
+in
+    % QUIT %
+    if (eql(type,"button") and eql(name,"quit")) or (ch==`q) then 0
+
+    % ZOOM IN ON MIDDLE BUTTON CLICK %
+    else if eql(type,"click") and (button == 2) then
+	let 
+	    zbox = if eql(name,"mesh") then w_get_zoom_box(pt,2,box1)
+                   else w_get_zoom_box(pt,1,box2);
+	    win,box1 = reset_zoom(zbox,data,win,box1,box2);
+	in separator_loop(data,win,box1,box2)
+
+    % ZOOM OUT %
+    else if (eql(type,"button") and eql(name,"zoom up")) then
+        let 
+	    zbox = w_bounding_box({p[0],p[1]: p in flatten({p:p,e in data})});
+	    win,box1 = reset_zoom(zbox,data,win,box1,box2);
+	in separator_loop(data,win,box1,box2)
+
+    % COLOR REGIONS %
+    else if eql(type,"button") and eql(name,"color regions") then
+	let foo = redraw_graph(box1,data);
+	in separator_loop(data,win,box1,box2) 
+
+    % STEP %
+    else if eql(type,"button") and eql(name,"step") then
+	let new_data = flatten({separate_graph((pts,edgs),box1)
+				: pts,edgs in data});
+	in separator_loop(new_data,win,box1,box2) 
+
+    % ELSE JUST LOOP %
+    else separator_loop(data,win,box1,box2) $
+
+
+% ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; %
+%   READING AND PLOTTING          %
+% ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; %
+
+function partition_by_n(a,n) = partition(a,dist(n, #a/n)) $
+
+function read_graph(graph,dimensions) =
+let flat_points = read_float_seq_from_file(graph ++ ".nodes");
+    flat_edges  = read_int_seq_from_file(graph ++ ".edges");
+    points      = partition_by_n(flat_points,dimensions);
+    edges       = {a[0],a[1] : a in partition_by_n(flat_edges,2)}
+in (points,edges) $
+
+function init_plot(graph) =
+let 
+    (points,edges) = graph;
+
+    % Create the window %
+    display = get_environment_variable("DISPLAY");
+    win = w_make_window(((100,0),(850,675)),"Separator",w_pink,display);
+
+    % Add the main box and draw the original edges %
+    bbox = w_bounding_box(points);  
+    win,box1 = w_add_box(((175,50),(650,600)),bbox,"mesh",w_black,win);
+    foo = w_draw_segments(get_from_edges(edges,points),2,w_blue,box1);
+
+    % Add the little zoom box and fill it with the points %
+    win,box2 = w_add_box(((15,50),(145,130)),bbox,"mesh2",w_black,win);
+    foo = w_draw_points(points,w_red,box2);
+    win = w_add_text((50,20),"Zoom Display",w_black,win);
+
+    % Add the buttons (offset,size,stride) %
+    buttons = ["quit","zoom up","color regions","step"];
+    win = w_add_button_stack(((35,450),(95,35),(0,50)),buttons,w_blue,win);
+
+    win = w_add_text((250,20),"To zoom press the middle button on one corner and release on the other",w_black,win);
+in win,box1,box2 $
+
+% ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; %
+%   SEPARATOR DEMO                %
+% ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; %
+
+% You can pass this anything as an argument %
+function separator_demo(ignore) =
+let 
+    graph_files    = nesl_path ++ "examples/airfoil";
+    (points,edges) = read_graph(graph_files,2);
+    win,box1,box2 = init_plot({a[0],a[1]: a in points},edges); 
+    part     = separator_loop([(points,edges)],win,box1,box2);
+in w_kill_window(win) $

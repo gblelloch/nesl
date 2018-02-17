@@ -1,0 +1,10 @@
+
+% FFT of vector a;  pw is vector of powers of w %
+function fft(a,pw) =
+if #a == 1 then a
+else 
+    let
+	epw = even_elts(pw);
+	r = {fft(x,epw): x in [even_elts(a),odd_elts(a)]};
+	er,or = r[0],r[1]
+    in {e + o * w: e in er++er; o in or++or; w in pw} $

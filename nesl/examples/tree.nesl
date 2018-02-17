@@ -1,0 +1,46 @@
+
+% The data structure for storing the left and right parenthesis pointers %
+% The nodes are in preorder traversal %
+datatype ptree([int],[int]) $
+
+% Extract the left parenthesis pointers %
+function left_paren(ptree(l,r)) = l $
+
+% Extract the right parenthesis pointers %
+function right_paren(ptree(l,r)) = r $
+
+% Return the size of a tree %
+function tree_size(ptree(l,r)) = #l $
+
+function plus_rootfix(values, tree) =
+let 
+    x = dist(0,2*#values);
+    x = x <- {(l,v) : l in left_paren(tree) ; v in values}; 
+    x = x <- {(r,-v) : r in right_paren(tree) ; v in values};
+    s = plus_scan(x);
+in s -> left_paren(tree) $
+
+function plus_leaffix(values, tree) =
+let 
+    x = dist(0,2*#values);
+    x = x <- {(l,v) : l in left_paren(tree) ; v in values};
+    s = plus_scan(x);
+    l = s -> left_paren(tree);    % Get the value from the left pointer %
+    r = s -> right_paren(tree);   % Get the value from the right pointer %
+in {r - l: r; l}  $               % The answer is the difference %
+
+function delete_vertices(flags, tree) =
+  let 
+    x = dist(f,2*#flags);
+    x = x <- {(l,fl) : l in left_paren(tree) ; fl in flags};
+    x = x <- {(r,fl) : r in right_paren(tree) ; fl in flags};
+    i = enumerate(x); 
+    l = {i in (i -> left_paren(tree)); fl in flags | fl};
+    r = {i in (i -> right_paren(tree)); fl in flags | fl};
+  in ptree(l, r) $
+
+function depth(tree) =
+  plus_rootfix(dist(1, tree_size(tree)), tree) $
+
+% This represents the tree ((()()())()) %
+example_tree = ptree([0, 1, 2, 4, 6, 9], [11, 8, 3, 5, 7, 10]);

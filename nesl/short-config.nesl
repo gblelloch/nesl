@@ -1,0 +1,15 @@
+
+%
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; DEFINITION OF THE MACHINE CONFIGURATIONS.                              ;;
+;;                                                                        ;;
+;; If you are NOT going to be using remote access, then this file can     ;;
+;; probably be left alone.  If you are going to use remote access, then   ;;
+;; you will need to set up the variables and configurations appropriately.;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+%
+
+% This definition is the default %
+defconfig local,
+  interp_file:="/afs/cs.cmu.edu/project/scandal/vcode/2.1/bin/serial/vinterp",
+  memory_size:=500000;

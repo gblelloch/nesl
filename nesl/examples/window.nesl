@@ -1,0 +1,67 @@
+
+neslprog = "/afs/cs/project/scandal/nesl/runnesl";
+window_size = 660,550;
+window_offset = 200,0;
+font_size = (8,16);
+font_name = "8x16";
+left_margin = 10;
+prompt_height = 500;
+
+function get_prompt(strin) =
+let 
+    (inlines,fl),e = read_string(">",-1,strin);
+in
+    if eql(take(inlines,-5),"<Nesl") then drop(inlines,-5)
+    else inlines ++ ">" ++ get_prompt(strin) $
+
+function exec_nesl(inline,strin,strout) =
+let foo = write_string(inline++[newline],strout);
+in linify(get_prompt(strin)) $
+
+function get_input(gc,backgc,win) =
+let
+    fl,fh = font_size;
+    wl,wh = window_size;
+    poff = left_margin+7*fl;
+    foo = xps_shade_rectangle(((poff,prompt_height-5),(wl,fh+5)),backgc,win);
+in read_plot_line((poff,prompt_height),font_size,gc,backgc,win) $
+
+function display_output(lines,gc,backgc,win) =
+let
+    fl,fh = font_size;
+    wl,wh = window_size;
+    foo = xps_shade_rectangle(((left_margin,0),(wl,prompt_height-5)),
+			      backgc,win);
+in text_to_window(lines,(left_margin,prompt_height),fh+2,gc,win) $
+
+function interp_loop(strin,strout,gc,backgc,win) =
+let 
+    inline = get_input(gc,backgc,win);
+    output = if (inline[#inline-1] == `;) 
+             then exec_nesl(inline,strin,strout)
+	     else ["","Input must end with a semicolon"];
+    foo = display_output(output,gc,backgc,win);
+in 
+    if eql(inline,"quit;") then xps_kill_window(win)
+    else interp_loop(strin,strout,gc,backgc,win) $
+
+function make_nesl_window(display) =
+let
+    window_width,window_height = window_size;
+    win,screen_type,e = xps_nmake_window((window_offset,window_size),
+					 "Nesl Interp",display);
+    black = xps_black_pixel(win);   
+    white = xps_white_pixel(win);
+    gc_black = xps_color_gc(xps_func_copy,xps_color_blue,win);
+    gc_white = xps_text_gc(xps_func_copy,white,black,font_name,win);
+    foo = xps_shade_rectangle(((0,0),window_size),gc_black,win);
+    (in_s,out_s,err_s),err = spawn(neslprog,nullstr,nullstr,stderr);
+    foo = get_prompt(out_s);
+    foo = xps_draw_string((left_margin,prompt_height),"<Nesl> ",gc_white,win);
+    foo = write_string("set verbose off;"++[newline],in_s);
+    foo = get_prompt(out_s);
+in interp_loop(out_s,in_s,gc_white,gc_black,win) $
+
+%
+dump vcode "/afs/cs/project/scandal/fun/src/neslwin.vcode" make_nesl_window(get_environment_variable("DISPLAY"));
+%

@@ -1,0 +1,57 @@
+function pick_pairs(S) =
+let
+    n2 = #S/2;
+    remain = drop(S,2*n2);
+    E = S->[0:n2*2:2];
+    O = S->[1:n2*2:2];
+    pairs = {if x_0 < x_1 then (x_0,y_0),(x_1,y_1) else (x_1,y_1),(x_0,y_0)
+	     : (x_0,y_0) in E ; (x_1,y_1) in O 
+	     | x_0 /= x_1};
+    remain = {if y_0 < y_1 then (x_1,y_1) else (x_0,y_0)
+	      : (x_0,y_0) in E ; (x_1,y_1) in O 
+	      | x_0 == x_1} ++ remain;
+in remain,pairs $
+
+function supporting_points(K,S) =
+let
+    D = {y-K*x : (x,y) in S};
+    d_max = max_val(D);
+    MAX = {S; d in D | abs((d - d_max)/d) < 1e-14};
+in MAX[min_index({x : (x,y) in MAX})],
+   MAX[max_index({x : (x,y) in MAX})] $
+
+function slope((x0,y0),(x1,y1)) = (y1-y0)/(x1-x0) $
+
+function bridge(S,a) =
+let remain,pairs = pick_pairs(S)
+in if #S == 2 then pairs[0]
+   else let
+       K = median({slope(p_i,p_j): (p_i,p_j) in pairs});
+       p_k,p_m = supporting_points(K,S);
+   in
+       if first(p_k)<=a and first(p_m)>a then p_k,p_m
+       else 
+	   let
+	       S_n = if first(p_k) <= a 
+	             then flatten({if slope(p_i,p_j) >= K
+	                           then [p_j] else [p_i,p_j]
+				   : (p_i,p_j) in pairs})
+                     else flatten({if slope(p_i,p_j) <= K
+                                   then [p_i] else [p_i,p_j]
+				   :  (p_i,p_j) in pairs})
+	in bridge(S_n++remain,a) $
+
+function connect(p_k,p_m,S) =
+if eql(p_k,p_m) then [p_k]
+else let 
+    a = median({x : (x,y) in S});
+    (p_l,p_r) = bridge(S,a);
+    S_left = {(x,y) in S | x <= first(p_l)};
+    S_right = {(x,y) in S | x >= first(p_r)};
+in flatten({connect(data) : data in [(p_k,p_l,S_left),(p_r,p_m,S_right)]}) $
+
+function kirkpatrick_seidel_upper_hull(S) =
+let x = {x : (x,y) in S};
+    p_min = S[min_index(x)];
+    p_max = S[max_index(x)];
+in connect(p_min,p_max,S) $

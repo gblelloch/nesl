@@ -1,0 +1,28 @@
+
+datatype vv_char([int],[int],[char]) $
+
+function make_vv_char(nstr) =
+  let len = {#nstr: nstr}
+  in vv_char(plus_scan(len), len, flatten(nstr)) $
+
+function character_rank(chars) =
+  rank({char_code(chars): chars}) $
+
+function string_orders(words, data, i) =
+  if zerop(#words)
+  then [] int
+  else 
+    let 
+      vv_char(offset, len, vals) = data; 
+      long_word_flags = {x1210 > 1 + i: x1210 in get(len, words)}; 
+      long_words = pack(zip(words, long_word_flags)); 
+      short_words = pack(zip(words, {not(long_word_flags): long_word_flags})); 
+      sorted_long_words = string_orders(long_words, data, i + 1); 
+      sorted_words = append(short_words, sorted_long_words); 
+      character_offsets = {i + x1211: x1211 in get(offset, sorted_words)}; 
+      chars_at_position_i = get(vals, character_offsets)
+    in permute(sorted_words, character_rank(chars_at_position_i)) $
+
+function string_rank(words) =
+  let idx = index(#words)
+  in permute(idx, string_orders(idx, make_vv_char(words), 0)) $

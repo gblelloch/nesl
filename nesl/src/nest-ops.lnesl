@@ -1,0 +1,142 @@
+;;;
+;;; Copyright (c) 1992 Carnegie Mellon University 
+;;;                    SCAL project: Guy Blelloch, Siddhartha Chatterjee,
+;;;                                  Jonathan Hardwick, Jay Sipelstein,
+;;;                                  Marco Zagha
+;;; All Rights Reserved.
+;;;
+;;; Permission to use, copy, modify and distribute this software and its
+;;; documentation is hereby granted, provided that both the copyright
+;;; notice and this permission notice appear in all copies of the
+;;; software, derivative works or modified versions, and any portions
+;;; thereof, and that both notices appear in supporting documentation.
+;;;
+;;; CARNEGIE MELLON ALLOWS FREE USE OF THIS SOFTWARE IN ITS "AS IS"
+;;; CONDITION.  CARNEGIE MELLON DISCLAIMS ANY LIABILITY OF ANY KIND FOR
+;;; ANY DAMAGES WHATSOEVER RESULTING FROM THE USE OF THIS SOFTWARE.
+;;;
+;;; The SCAL project requests users of this software to return to 
+;;;
+;;;  Guy Blelloch				guy.blelloch@cs.cmu.edu
+;;;  School of Computer Science
+;;;  Carnegie Mellon University
+;;;  5000 Forbes Ave.
+;;;  Pittsburgh PA 15213-3890
+;;;
+;;; any improvements or extensions that they make and grant Carnegie Mellon
+;;; the rights to redistribute these changes.
+;;;
+
+#|
+Note that PARTITION and FLATTEN are the only user accessible functios that
+deal with segments directly.  These should be considered the primitives
+for moving between levels of nesting.  All other operations should
+be built out of these (this will make it easier to update things
+if the representation of segments change).
+|#
+
+(defop (partition v counts) ! 
+  ((v.v.alpha <- v.alpha v.int) (alpha any))
+  (with (((vector vseg vdata) v)
+	 ((vector cseg cdata) counts))
+    (vector cseg (vector (make-segdes cdata) vdata)))
+  :documentation
+  "Given a sequence of values and another sequence of counts, {\\tt partition}
+returns a nested sequence with each subsequence being of a length
+specified by the counts.  The sum of the counts must equal the
+length of the sequence of values."
+  :shortdoc "Partition sequence v into a nested sequence. "
+  :example
+  (((a0 a1 a2 a3) (a4) (a5 a6 a7)) <-
+   (a0 a1 a2 a3 a4 a5 a6 a7)
+   (4 1 3))
+  :argcheck ((/= (sum counts) (length v))
+	     "Length mismatch in function PARTITION."))
+
+
+(defop (flatten v) ! ((v.alpha <- v.v.alpha) (alpha any))
+  (with (((vector vseg (vector nvseg vdata)) v)
+	 (counts (vector vseg (prim-seg-lengths nvseg))))
+    (vector (make-segdes (sum counts)) vdata))
+  :documentation
+"Given a nested sequence of values, {\\tt flatten} flattens the sequence."
+  :shortdoc "Flatten nested sequence v."
+  :example
+  ((a0 a1 a2 a3 a4 a5 a6 a7) <-
+   ((a0 a1 a2) (a3 a4) (a5 a6 a7))))
+
+(defop (split_index flags) ! (((pair v.int v.int) <- v.bool))
+  (with ((not-f  (v.btoi (v.not flags))) 
+	 (i-down (plus_scan not-f))
+	 (sum-down (sum not-f))
+	 (i-up   (v.+ v.sum-down (plus_scan (v.btoi flags)))))
+    (pair (vpair sum-down (- (length flags) sum-down))
+	  (v.select flags i-up i-down))))
+
+(defop (split v flags) ! ((v.v.alpha <- v.alpha v.bool) (alpha any))
+  (with (((pair counts index) (split_index flags)))
+    (partition (permute v index) counts))
+  :documentation
+"Given a sequence of values {\\tt v} and a boolean sequence of
+{\\tt flags}, {\\tt split} creates a nested sequence of length
+2 with all the elements with an {\\tt f} in
+their flag in the first element and elements with a {\\tt t} in
+their flag in the second element."
+  :shortdoc "Split a into nested sequence based on flags."
+  :example
+  (((a1 a3 a4) (a0 a2 a5 a6 a7)) <-
+   (a0 a1 a2 a3 a4 a5 a6 a7)
+   (t f t f f t t t))
+  :redefine no)
+
+(defop (bottop v) ! ((v.v.alpha <- v.alpha) (alpha any))
+  (with ((l (length v))
+	 (botlen (rshift (+ l 1) 1)))
+    (partition v (vpair botlen (- l botlen))))
+  :documentation
+"Given a sequence of values {\\tt values}, {\\tt bottop} 
+creates a nested sequence of length
+2 with all the elements from the bottom half of the sequence in
+the first element and elements from the top half of the sequence in 
+the second element."
+  :shortdoc "Split a into nested sequence." 
+  :example
+  (((a0 a1 a2 a3) (a4 a5 a6)) <-
+   (a0 a1 a2 a3 a4 a5 a6))
+  :redefine no)
+
+(defop (head_rest values) ! (((pair alpha v.alpha) <- v.alpha) (alpha any))
+  (pair (elt values 0) (drop values 1))
+  :documentation
+"Given a sequence of values {\\tt values} of length $>$ 0, {\\tt head_rest} 
+returns a pair containing the first element of the sequence, and the
+remaining elements of the sequence."
+  :redefine no)
+
+(defop (rest_tail values) ! (((pair v.alpha alpha) <- v.alpha) (alpha any))
+  (with ((n (- (length values) 1)))
+    (pair (take values n) (elt values n)))
+  :documentation
+"Given a sequence of values {\\tt values} of length $>$ 0, {\\tt rest_tail} 
+returns a pair containing all but the last element of the sequence, and the
+last element of the sequence."
+  :redefine no)
+
+(defop (transpose a)
+  (if (= (length a) 0) 
+      a
+    (with ((columns (length a))
+	   (rows (min_val (v.length a)))
+	   (index (flatten (over ((ind (iseq1 0 columns)))
+				 (with ((seg (make-segdes rows)))
+				   (vector seg (prim-iseq ind columns seg))))))
+	   (data (permute_nocheck (flatten a) index)))
+      (partition data (dist columns rows))))
+  :documentation
+  "Transposes a nested sequence.  For example {\\tt transpose([[2,3,4],[5,6,7]])}
+would return {\\tt [[2,5],[3,6],[4,7]]}.  All the subsequence must be
+the same length."
+  :argcheck ((with ((len (v.length a))) 
+	       (and (plusp (length a))
+		    (/= (max_val len) (min_val len))))
+	     "Lengths of subsequences are not equal in function TRANSPOSE."))

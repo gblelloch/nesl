@@ -1,0 +1,9 @@
+
+function paren_match(foo) =
+  let 
+    left_flag = {foo == `(: foo}; 
+    val = {select(left_flag, 1, -1): left_flag}; 
+    sc = {btoi(l) + b: l in left_flag; b in plus_scan(val)};
+    rnk = permute(index(#sc), rank(sc)); 
+    ret = interleave(odd_elts(rnk), even_elts(rnk))
+  in permute(ret, rnk) $

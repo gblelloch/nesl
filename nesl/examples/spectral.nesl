@@ -1,0 +1,151 @@
+% 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+This example code is for a spectral separator.
+It uses the repeated squares method to find the second eigenvecor
+of the jacobian matrix of the input graph.  The file also supplies a demo
+for a 2-dimensional graph of an airfoil.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+%
+
+% ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; %
+%   CONVERT EDGES INTO AN ADJACENCY MATRIX %
+% ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; %
+
+% edges -- sequence of pairs of integers.  Each integer is a pointer to 
+           a vertex
+  result -- Standard compressed-row representation of a sparse matrix.
+            i.e. a nested sequence in which each subsequence represents a row
+            of the matrix.  Each element of a row is a pair containing
+            the column index and column value.  Only nonzero elements are kept.
+%
+function make_matrix(edges) =
+let 
+    % Add reverse edges (to create symmetric matrix). %
+    all_edges  = edges ++ {(e2,e1): (e1,e2) in edges};
+
+    % Create a nested sequence with one row per subsequence.  This is 
+      implemented by collecting together edges with the same left pointer. %
+    adj_list   = {v : (k,v) in int_collect(all_edges)};
+
+    % maximum length of any row %
+    max_degree = float(max_val({#row: row in adj_list}));
+
+    % The value of each off diagonal is 1.0, and the value of the diagonal
+      elements is .1 + max_degree - length of the row.
+      This guarantees that each diagonal is positive %
+    matrix = {{(j,1.0): j in row} ++ [(i,.1 + max_degree - float(#row))]
+	      : row in adj_list
+	      ; i in [0: #adj_list]};
+in matrix $
+
+% ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; %
+%   SPARSE MATRIX x VECTOR MULTIPLY    %
+% ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; %
+
+function sparse_mvmult(a,x) =
+let ids,vals = unzip(flatten(a));
+    newvals = {vals*g:vals;g in x->ids}
+in {sum(row): row in partition(newvals,{#a:a})} $
+
+function normalize(a) = 
+  let s = sqrt(sum({a^2: a})); 
+  in {a/s : a} $
+
+% ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; %
+%   REPEADED SQUARES METHOD FOR        %
+%   FINDING THE SECOND EIGENVECTOR     %
+% ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; %
+
+% 
+  A is a sparse matrix
+  v is the current guess at the second eigenvector
+  v1 is the first eigenvector
+  i is the number of iterations to repeat 
+  Returns the new second eigenvector 
+%
+function repeat_square(A,v,v1,i) =
+if (i == 0) then v
+else
+  let g  = sum({v*v1: v; v1});     % Dot Product %
+      v2 = {v-g*v1: v; v1};        % Subtract off V1 component %
+      v2 = sparse_mvmult(A,v2);    % Multiply by matrix %
+      e0 = 1.0/v2[0];
+      v2 = {v2*e0: v2};            % Normalize on first element %
+  in repeat_square(A,v2,v1,i-1) $
+
+% Calculates how cloase v is to being an eigenvector of A %
+function eigen_error(A,v) =
+let v1 = sparse_mvmult(A,v);
+    e1 = 1.0/v1[0];
+    v1 = {v1*e1: v1};
+    max = max_val(v1);
+in sqrt(sum({((v1-v)/max)^2: v1; v})/float(#v)) $
+
+% Searches for the second eigenvector given the first eigenvector %
+function multi_repeat_square(A,v,v1,ebound) =
+let v2 = repeat_square(A,v,v1,100);
+    error = eigen_error(A,v2);
+    _ = print_line("Eigenvector error = " ++ @error)
+in if (error < ebound) then v2
+   else multi_repeat_square(A,v2,v1,ebound) $
+
+function second_eigenvector(A,n,error_bound) =
+let v = {rand(i): i in dist(1.0,n)};
+    v1 = normalize(dist(1.0,n))
+in multi_repeat_square(A,v,v1,error_bound) $
+
+% ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; %
+%   READING AND DRAWING           %
+% ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; %
+
+% partitions a sequence of length a into groups of length n %
+function partition_by_n(a,n) = partition(a,dist(n, #a/n)) $
+
+function read_graph(graph,dimensions) =
+let flat_points = read_float_seq_from_file(graph ++ ".nodes");
+    flat_edges  = read_int_seq_from_file(graph ++ ".edges");
+    points      = partition_by_n(flat_points,dimensions);
+    edges       = {a[0],a[1] : a in partition_by_n(flat_edges,2)}
+in (points,edges) $
+
+function get_from_edges(edges,v) =
+  {(e1,e2) : e1 in v->{e1: (e1,e2) in edges} ; 
+             e2 in v->{e2: (e1,e2) in edges} } $
+
+function draw_graph(points,edges) =
+let 
+    window = w_make_window(((200,100),(600,600)),  % Window position and size %
+			   "separator graph",      % Window title %
+			   w_black,                % Background color %
+			   display);               % Default display %
+    bound_box = w_bounding_box(points);
+    window,box = w_add_box(((50,50),(500,500)),% offset,size within window %
+			   bound_box,          % offset,size of virtual coords%
+			   "graph box",        % box title %
+			   w_white,            % box color %
+			   window);            % window %
+
+    _ = w_draw_segments(get_from_edges(edges,points),1,w_black,box);
+
+    _ = w_add_text((250,20),"Click on window to remove",w_white,window);
+    _ = w_get_input(window);  % wait for an event %
+in w_kill_window(window)$
+
+% ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; %
+%   DEMO                               %
+% ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; %
+
+% The argument is ignored -- pass it anything. %
+function spectral_separator_demo( _ ) =
+let graph_files    = nesl_path ++ "examples/airfoil";
+    (nodes,edges)  = read_graph(graph_files,2);
+    matrix         = make_matrix(edges);
+    error          = 5e-4;
+    eigenvector    = second_eigenvector(matrix, #nodes, error);
+    median         = median(eigenvector);
+    part           = {if (x < median) then 0 else 1: x in eigenvector};
+    internal_edges = {e in edges
+		      ; (e1,e2) in get_from_edges(edges,part) 
+		      | e1==e2};
+    graph          = draw_graph({(a[0],a[1]): a in nodes}, internal_edges);
+in #internal_edges $

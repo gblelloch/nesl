@@ -1,0 +1,13 @@
+function subseq(a,start,end) = a->[start:end];
+
+function take(n,a) = a->[0:n];
+
+function drop(n,a) = a->[n:#a];
+
+function rotate(a,n) = a->{mod(i-n,#a) : i in [n:n + #a]};
+
+function even_elts(a) = a->[0:#a:2];
+
+function odd_elts(a) = a->[1:#a:2];
+
+function bottop(a) = [a->[0:#a/2],a->[#a/2:#a]];

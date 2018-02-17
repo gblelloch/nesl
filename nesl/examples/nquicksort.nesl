@@ -1,0 +1,13 @@
+
+function qsort1(a) : [int] -> [int] =
+if (eql(any(a),all(a)) or (#a==0)) then a
+else
+  let pivot   = a[rand(#a)];
+  in flatten({qsort(v) : v in split(a, {e > pivot : e in a})});
+
+function qsort(a) : [int] -> [int] =
+if #a==0 then a
+else
+  let pivot = a[#a-1];
+      vals = a->index(#a-1);
+  in flatten({qsort(v) : v in split(vals , {e >= pivot : e in vals})});

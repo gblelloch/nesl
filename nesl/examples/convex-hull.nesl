@@ -1,0 +1,64 @@
+%
+This example finds the convex hull in 2 dimensions for a set of points
+using the QuickHull algorith.  The algorithm is described in the NESL
+language definition.
+This file also includes a function, hull_demo(n), that picks
+approximately n random points in a circle, plots the points, finds the
+hull, and plots the hull.
+%
+
+% Used to find the distance of a point (o) from a line (line). %
+function cross_product(o,line) =
+let (xo,yo) = o; 
+    ((x1,y1),(x2,y2)) = line;
+in (x1-xo)*(y2-yo) - (y1-yo)*(x2-xo);
+
+% Given two points on the convex hull (p1 and p2), hsplit finds all
+  the points on the hull between p1 and p2 (clockwise), inclusive of 
+  p1 but not of p2. %
+function hsplit(points,p1,p2) =
+let cross = {cross_product(p,(p1,p2)): p in points};
+    packed = {p in points; c in cross | plusp(c)};
+in if (#packed < 2) then [p1] ++ packed
+   else
+     let pm = points[max_index(cross)];
+     in flatten({hsplit(packed,p1,p2): p1 in [p1,pm]; p2 in [pm,p2]});
+
+% Finds the points with minimum and maximum x coordinates, and then
+  finds the upper and lower convex hull: the part clockwise from minx to 
+  maxx (upper) and clockwise from maxx to minx (lower). %
+function convex_hull(points) =
+let x = {x : (x,y) in points};
+    minx = points[min_index(x)];
+    maxx = points[max_index(x)];
+in hsplit(points,minx,maxx) ++ hsplit(points,maxx,minx);
+
+% Generates approximately n random points in the unit circle.
+  It works by generating 4n/pi points in a square and throwing out
+  the points that are not within the circle. %
+function random_points(n) =
+let m = round(float(n)*4.0/pi);
+    points = {rand(i) - 1.0, rand(i) - 1.0: i in dist(2.0,m)};
+in {x,y in points | x^2 + y^2 < 1.0} ;
+
+% Demo of convex hull.  N is the number approximate number of points. %
+function hull_demo(n) =
+let 
+    points = random_points(n);
+    ignore = if (#points < 2) then print_string("Not enough points.") else f;
+    box =    bounding_box([(-1.0,-1.0),(1.0,1.0)]);
+    window = w_make_window(((200,100),(600,600)),  % Window position and size %
+			   "convex hull",          % Window title %
+			   w_black,                % Background color %
+			   display);               % Default display %
+    window,box = w_add_box(((50,50),(500,500)),% offset,size within window %
+			   ((-1.,-1.),(2.,2.)),% offset,size of virtual coords%
+			   "hull box",         % box title %
+			   w_white,            % box color %
+			   window);            % window %
+    ignore = w_draw_points(points,w_black,box);
+    hull =   convex_hull(points);
+    ignore = w_draw_segments(zip(hull,rotate(hull,1)),2,w_black,box);
+    ignore = w_add_text((250,20),"Click on window to remove",w_white,window);
+    ignore = w_get_input(window);  % wait for an event %
+in w_kill_window(window)$

@@ -1,0 +1,460 @@
+;;;
+;;; Copyright (c) 1992, 1993, 1994 Carnegie Mellon University
+;;; All Rights Reserved.
+;;;
+;;; See COPYRIGHT file for further information.
+;;;
+
+(defop (nesl-run-error s) ! ((alpha <- beta) (alpha any) (beta any))
+  (:primitive prim-nesl-run-error)
+  :primitive t) 
+
+(defop (not a) ! ((alpha <- alpha) (alpha logical))
+  (:primitive prim-not)
+  :primitive t
+  :documentation
+  "Returns the logical inverse of the argument.  For integers, this
+is the ones complement.")
+
+(defop (or a b) ! ((alpha <- alpha alpha) (alpha logical))
+  (:primitive prim-or)
+  :primitive t
+  :documentation
+  "Returns the inclusive or of the two arguments."
+  :infix or)
+
+
+(defop (and a b) ! ((alpha <- alpha alpha) (alpha logical))
+  (:primitive prim-and)
+  :primitive t
+  :documentation
+  "Returns the logical and of the two arguments."
+  :infix and)
+
+
+(defop (xor a b) ! ((alpha <- alpha alpha) (alpha logical))
+  (:primitive prim-xor)
+  :primitive t
+  :documentation
+  "Returns the exclusive or of the two arguments."
+  :infix xor)
+
+
+(defop (== a b) ! ((bool <- alpha alpha) (alpha ordinal))
+  (:primitive prim-==)
+  :primitive t
+  :documentation
+  "Returns {\\tt t} if the two arguments are equal."
+  :infix ==)
+
+(defop (/= a b) ! ((bool <- alpha alpha) (alpha ordinal))
+  (:primitive prim-/=)
+  :primitive t
+  :documentation
+  "Returns {\\tt t} if the two arguments are not equal."
+  :infix /=)
+
+(defop (< a b) ! ((bool <- alpha alpha) (alpha ordinal)) 
+  (:primitive prim-<)
+  :primitive t
+  :documentation
+  "Returns {\\tt t} if the first argument is strictly less than the 
+second argument."
+  :infix <)
+
+(defop (> a b) ! ((bool <- alpha alpha) (alpha ordinal))
+  (:primitive prim->)
+  :primitive t
+  :documentation
+  "Returns {\\tt t} if the first argument is strictly 
+greater than the second argument."
+  :infix >)
+
+(defop (<= a b) ! ((bool <- alpha alpha) (alpha ordinal))
+  (:primitive prim-<=)
+  :primitive t
+  :documentation
+  "Returns {\\tt t} if the first argument is less than or equal to the 
+second argument."
+  :infix <=)
+
+(defop (>= a b) ! ((bool <- alpha alpha) (alpha ordinal))
+  (:primitive prim->=)
+  :primitive t
+  :documentation
+  "Returns {\\tt t} if the first argument is greater or equal to the second
+argument."
+  :infix >=)
+
+
+(defop (plusp v) ! ((bool <- alpha) (alpha number))
+  (:primitive prim-plusp)
+  :primitive t
+  :documentation
+  "Returns {\\tt t} if {\\tt v} is strictly greater than 0.")
+
+(defop (minusp v) ! ((bool <- alpha) (alpha number))
+  (:primitive prim-minusp)
+  :primitive t
+  :documentation
+  "Returns {\\tt t} if {\\tt v} is strictly less than 0.")
+
+
+(defop (zerop v) ! ((bool <- alpha) (alpha number))
+  (:primitive prim-zerop) 
+  :primitive t
+  :documentation
+  "Returns {\\tt t} if {\\tt v} is equal to 0.")
+
+(defop (oddp v) ! ((bool <- int))
+  (:primitive prim-oddp) 
+  :primitive t
+  :documentation
+  "Returns {\\tt t} if {\\tt v} is odd (not divisible by two).")
+
+(defop (evenp v) ! ((bool <- int))
+  (:primitive prim-evenp) 
+  :primitive t
+  :documentation
+  "Returns {\\tt t} if {\\tt v} is even (divisible by two).")
+
+
+(defop (+ a b) ! ((alpha <- alpha alpha) (alpha number))
+  (:primitive prim-+)
+;  (:primitive 'prim-+)
+  :primitive t
+  :documentation
+  "Returns the sum of the two arguments."
+  :infix +)
+
+(defop (- a b) ! ((alpha <- alpha alpha) (alpha number))
+  (:primitive prim--)
+  :primitive t
+  :documentation
+  "Subtracts the second argument from the first."
+  :infix -)
+
+(defop (negate a) ! ((alpha <- alpha) (alpha number))
+  (:primitive prim-negate)
+  :primitive t
+  :documentation
+  "Negates a number."
+  :infix -)
+
+(defop (select flag a b) ! ((alpha <- bool alpha alpha) (alpha any))
+  (:primitive prim-select)
+  :primitive t
+  :documentation 
+  "Returns the second argument if the flag is {\tt T} and the third 
+argument if the flag is {\tt F}.  This differs from an {\tt if}
+form in that both arguments are evaluated."
+)
+
+(defop (abs a) ! ((alpha <- alpha) (alpha number))
+  (:primitive prim-abs)
+  :primitive t
+  :documentation
+  "Returns the absolute value of the argument.")
+
+(defop (max a b) ! ((alpha <- alpha alpha) (alpha ordinal))
+  (:primitive prim-max)
+  :primitive t
+  :documentation
+  "Returns the argument that is greatest (closest to positive infinity).")
+
+(defop (min a b) ! ((alpha <- alpha alpha) (alpha ordinal))
+  (:primitive prim-min)
+  :primitive t
+  :documentation
+  "Returns the argument that is least (closest to negative infinity).")
+
+(defop (* a b) ! ((alpha <- alpha alpha) (alpha number))
+  (:primitive prim-*)
+  :primitive t
+  :documentation
+  "Returns the product of the two arguments."
+  :infix *)
+
+
+(defop (/ v d) ! ((alpha <- alpha alpha) (alpha number))
+  (:primitive prim-/)
+  :primitive t
+  :documentation
+  "Returns {\\tt v} divided by {\\tt d}.
+If the arguments are integers, the result is truncated
+towards 0."
+  :infix /
+  :argcheck ((zerop d) "Divide by zero."))
+
+
+(defop (rem v d) ! ((int <- int int))
+  (:primitive prim-rem)
+  :primitive t
+  :documentation
+  "Returns the remainder after dividing {\\tt v} by {\\tt d}.
+The following examples show {\\tt rem} does for negative
+arguments: {\\tt rem(5,3) = 2}, {\\tt rem(5,-3) = 2},
+{\\tt rem(-5,3) = -2}, and {\\tt rem(-5,-3) = -2}."
+  :argcheck ((zerop d) "Divide by zero in function REM."))
+
+
+(defop (mod v d) ! ((int <- int int))
+  (:primitive prim-mod)
+  :primitive t
+  :documentation
+  "Returns the modulus of the two arguments.  This differs from
+rem in how it effects negative numbers: 
+{\\tt mod(5,3) = 2}, {\\tt mod(5,-3) = -1},
+{\\tt mod(-5,3) = 1}, and {\\tt mod(-5,-3) = -2}."
+  :argcheck ((zerop d) "Divide by zero in function MOD."))
+
+
+;; does not handle lshift with -ve b
+
+(defop (lshift a b) ! ((int <- int int))
+  (:primitive prim-lshift)
+  :primitive t
+  :documentation
+  "Returns the first argument logically shifted to the left by the integer
+contained in the second argument.  Shifting will fill with 0-bits.")
+
+(defop (rshift a b) ! ((int <- int int))
+  (:primitive prim-rshift)
+  :primitive t
+  :documentation
+  "Returns the first argument logically shifted to the right by the integer
+contained in the second argument.  Shifting will fill with 0-bits or the
+sign bit, depending on the implementation.")
+
+
+(defop (sqrt v) ! ((float <- float))
+  (:primitive prim-sqrt)
+  :primitive t
+  :documentation
+  "Returns the square root of the argument.  The argument must be nonnegative."
+  :argcheck ((minusp v) "Sqrt of negative number."))
+
+
+(defop (ln v) ! ((float <- float))
+  (:primitive prim-ln)
+  :primitive t
+  :documentation
+  "Returns the natural log of the argument."
+  :argcheck ((minusp v) "Ln of negative number."))
+
+(defop (log v b) ! ((float <- float float)) 
+  (:primitive prim-log)
+  :primitive t
+  :documentation
+  "Returns the logarithm of {\\tt v} in the base {\\tt b}.")
+
+(defop (exp v) ! ((float <- float))
+  (:primitive prim-exp) 
+  :primitive t
+  :documentation
+  "Returns {\\it e} raised to the power {\\tt v}.")
+
+(defop (expt v p) ! ((float <- float float))
+  (:primitive prim-expt) 
+  :primitive t
+  :documentation
+  "Returns {\\tt v} raised to the power {\\tt p}.")
+
+
+(defop (one a) ! ((alpha <- alpha) (alpha number))
+  (:primitive prim-one)
+  :primitive t
+  :documentation 
+  "Returns a constant with the same type as {\\tt a} and value 1.")
+
+; need typecheck
+
+(defop (zero a) ! ((alpha <- alpha) (alpha number))
+  (:primitive prim-zero)
+  :primitive t
+  :documentation 
+  "Returns a constant with the same type as {\\tt a} and value 1.")
+
+
+(defop (^ a p) ! ((alpha <- alpha int) (alpha number))
+  (:primitive prim-^)
+  :primitive t
+  :documentation "Returns {\\tt v} raised to the integer power {\\tt p}."
+  :name power-
+  :infix ^)
+
+(defop (sin v) ! ((float <- float)) 
+  (:primitive sin)
+  :primitive t
+  :documentation
+  "Returns the sine of {\\tt v}, where {\\tt v} is in radians.")
+
+(defop (cos v) ! ((float <- float)) 
+  (:primitive cos)
+  :primitive t
+  :documentation
+  "Returns the cosine of {\\tt v}, where {\\tt v} is in radians.")
+
+(defop (tan v) ! ((float <- float)) 
+  (:primitive tan)
+  :primitive t
+  :documentation
+  "Returns the tangent of {\\tt v}, where {\\tt v} is in radians.")
+
+(defop (asin v) ! ((float <- float)) 
+  (:primitive asin)
+  :primitive t
+  :documentation
+  "Returns the arc sine of {\\tt v}. The result is in radians.")
+
+(defop (acos v) ! ((float <- float)) 
+  (:primitive acos)
+  :primitive t
+  :documentation
+  "Returns the arc cosine of {\\tt v}. The result is in radians.")
+
+(defop (atan v) ! ((float <- float)) 
+  (:primitive atan)
+  :primitive t
+  :documentation
+  "Returns the arc tangent of {\\tt v}. The result is in radians.")
+
+(defop (sinh v) ! ((float <- float)) 
+  (:primitive sinh)
+  :primitive t
+  :documentation
+  "Returns the hyperbolic sine of {\\tt v} ($(e^x - e^{-x})/2$).")
+
+(defop (cosh v) ! ((float <- float)) 
+  (:primitive cosh)
+  :primitive t
+  :documentation
+  "Returns the hyperbolic cosine of {\\tt v} ($(e^x + e^{-x})/2$).")
+
+(defop (tanh v) ! ((float <- float)) 
+  (:primitive tanh)
+  :primitive t
+  :documentation
+  "Returns the hyperbolic tangent of {\\tt v} 
+($(e^x - e^{-x})/(e^x + e^{-x})$).")
+
+
+(defop (btoi a) ! ((int <- bool))
+  (:primitive prim-btoi)
+  :primitive t
+  :documentation
+  "Converts the boolean values {\\tt t} and {\\tt f} into 1 and 0, 
+respectively.")
+
+(defop (code_char a) ! ((char <- int))
+  (:primitive code-char) 
+  :primitive t
+  :documentation
+  "Converts an integer to a character.  The integer must be the
+code for a valid character.")
+
+(defop (char_code a) ! ((int <- char))
+  (:primitive char-code) 
+  :primitive t
+  :documentation
+  "Converts a character to its integer code.")
+
+(defop (float v) ! ((float <- int))
+  (:primitive prim-float) 
+  :primitive t
+  :documentation
+  "Converts an integer to a floating-point number.")
+
+(defop (ceil v) ! ((int <- float))
+  (:primitive ceiling)
+  :primitive t
+  :documentation
+  "Converts a floating-point number to an integer by truncating toward 
+ positive infinity.")
+
+(defop (floor v) ! ((int <- float))
+  (:primitive floor)
+  :primitive t
+  :documentation
+  "Converts a floating-point number to an integer by truncating toward 
+negative infinity.")
+
+(defop (trunc v) ! ((int <- float))
+  (:primitive truncate)
+  :primitive t
+  :documentation
+  "Converts a floating-point number to an integer by truncating toward zero.")
+
+(defop (round v) ! ((int <- float))
+  (:primitive round)
+  :primitive t
+  :documentation
+  "Converts a floating-point number to an integer by rounding to the 
+nearest integer; if the number is exactly halfway between two integers, 
+then it is implementation specific to which integer it is rounded.")
+
+(defop (isqrt v) ! ((int <- int))
+  (:primitive prim-isqrt)
+  :primitive t
+  :documentation
+  "Returns the greatest integer less than or equal to the exact 
+square root of the integer argument.  The argument must be nonnegative.")
+
+
+(defop (rand v) ! ((alpha <- alpha) (alpha number))
+  (:primitive prim-rand)
+  :primitive t
+  :documentation
+  "For a positive value {\\tt v}, {\\tt rand} returns a random value 
+in the range [0..{\\tt v})."
+  :argcheck ((not (plusp v)) "Rand only works with positive numbers."))
+
+
+(defop (digitp c) ! ((bool <- char))
+  (:primitive prim-digitp)
+  :primitive t)
+
+
+(defop (start-timer foo) ! ((int <- int))
+  (:primitive prim-start-timer)
+  :primitive t)
+
+(defop (stop-timer start) ! ((float <- int))
+  (:primitive prim-stop-timer)
+  :primitive t)
+
+(defop (nor a b) 
+  (not (or a b))
+  :documentation
+  "Returns the inverse of the inclusive or of the two arguments."
+  :infix nor)
+
+
+(defop (nand a b) 
+  (not (and a b))
+  :documentation
+  "Returns the inverse of the and of the two arguments."
+  :infix nand)
+
+
+(defop (reciprocal v) ! ((float <- float))
+  (/ 1.0d0 v)
+  :documentation
+  "Returns the reciprocal of {\\tt v}.")
+
+(defop (power-2 a) (* a a))
+(defop (power-3 a) (* a (* a a)))
+
+(defop (gcd a b)
+  (if (== b 0)
+      a
+    (gcd b (rem a b))))
+
+
+(defop (time a) ! (((pair alpha float) <- alpha) (alpha any)) 
+  :stub
+  :documentation 
+  "The expression {\tt TIME({\it exp})} returns a pair whose first 
+element is the value of the expression {\it exp} and whose second
+element is the time in seconds taken to execute the expression {\it exp}.")
+

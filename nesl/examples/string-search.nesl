@@ -1,0 +1,9 @@
+function next_character(candidates,w,s,i) =
+if (i == #w) then candidates
+else
+  let letter    = w[i];
+      next_l    = s->{c + i: c in candidates};
+      candidates = {c in candidates; n in next_l | n == letter};
+  in next_char(candidates, w, s, i+1);
+
+function string_search(w, s) = next_character([0:#s - #w + 1],w,s,0);

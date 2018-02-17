@@ -1,0 +1,9 @@
+function order(s, k) =
+  let pivot  = s[#s/2];
+      lesser = {e in s| e < pivot};
+  in if (k < #lesser) then order(lesser, k)
+     else 
+       let greater = {e in s| e > pivot};
+       in if (k >= #s - #greater) then
+            order(greater, k - (#s - #greater))
+          else pivot;

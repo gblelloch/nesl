@@ -1,0 +1,14 @@
+% Fits a line to a set of of points. %
+function line_fit(x, y) =
+let 
+  n    = float(#x);
+  xa   = sum(x)/n;
+  ya   = sum(y)/n;
+  Stt  = sum({(x - xa)^2: x});
+  b    = sum({(x - xa)*y: x; y})/Stt;
+  a    = ya - xa*b;
+  chi2 = sum({(y-a-b*x)^2: x; y});
+  siga = sqrt((1.0/n + xa^2/Stt)*chi2/n);
+  sigb = sqrt((1.0/Stt)*chi2/n)
+in 
+  (a, b, siga, sigb) $

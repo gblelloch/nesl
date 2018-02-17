@@ -1,0 +1,38 @@
+dir = "/afs/cs.cmu.edu/project/scandal/nesl/current/examples/";
+
+load dir ++ "primes";
+load dir ++ "string-search";
+load dir ++  "median";
+load dir ++ "quicksort";
+load dir ++ "string-sort";
+load dir ++ "parentheses-match";
+
+
+function test(str, v) =
+  let 
+    t1 = print_string(str); 
+    t2 = if v
+         then print_string(" passed")
+         else print_string("........FAILED"); 
+    t3 = print_char(`
+)
+  in 0 $
+
+function testexamps(a) =
+  let 
+      foo = test("PRIMES", eql(#primes(50000), 5133)); 
+      foo = test("QUICKSORT", 
+		 eql(qsort(reverse(index(10000))), index(10000))); 
+      foo = test("MEDIAN", eql(order([5:500000:10], 1000), 10005)); 
+      foo = test("STRING SEARCH", 
+		 eql(string_search("foo", flatten(dist("foo", 5000))), 
+		     [0:15000:3])); 
+      randvect = {rand(i)+1000000: i in dist(1000000, 2000)}; 
+      foo = test("STRING RANK", 
+		 eql(string_rank({@randvect: randvect}), rank(randvect))); 
+      foo = test("PARENTHESES MATCH", 
+		 eql(reverse([0:2000]),
+		     paren_match(append(dist(`(, 1000), dist(`), 1000)))))
+  in 0 $
+
+testexamps(0) $

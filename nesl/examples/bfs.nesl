@@ -1,0 +1,32 @@
+
+%
+; Does a breadth-first-search of a graph and returns the BFS tree
+; representing the traversal.
+;   frontier -- the current frontier.  This should initially be set to the
+;               starting node(s) of the BFS.
+;   parents  -- a sequence of pointers from each node pointing to the parent
+;               in the BFS tree.  It should initially be set to all -1s.
+;   edges    -- a nested sequence representing the graph as an adjacency list.
+; The total work done is O(n + m) and the step complexity is O(depth),
+; where depth is the final depth of the BFS (the diameter of the graph).
+; In fact, the only extra work this code does beyond a serial version is on
+; removing the redundant frontier nodes.
+;;;;;;;;;;;; %
+
+function breadth_first_search(frontier, parents, edges) =
+if #frontier == 0 then parents
+else
+    let
+	% Get all neighbors of current frontier that have not been searched.
+          Also keep index of node from which they came %
+	neighbors = flatten({{i,j: i in edges[j] | parents[i] == -1} 
+			     : j in frontier});
+
+	% Hook new frontier to point to nodes from which they came %
+	parents = parents <- neighbors;
+
+	% Delete any redundant frontier nodes %
+	frontier = {i : (i,j) in neighbors | parents[i] == j};
+
+    % Recurse %
+    in breadth_first_search(frontier, parents, edges) $

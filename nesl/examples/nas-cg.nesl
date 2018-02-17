@@ -1,0 +1,166 @@
+% 
+This file contains Nesl code for the NAS conjugate gradient (CG)
+benchmark.  It uses a parallel version of MAKEA to build the array,
+and therefore does not generate an identical array as the original
+Fortran verson.  However, the form of the array is identical and the
+final results are quite close.  As with the Fortran version, two sets
+of parameters are given, one for a small problem and one for a large
+problem.  The fortran code was written by Robert Schreiber and Horst
+Simon.  There has been no attempt to optimize this code.  Don't forget
+to turn argument checking off before running any timings.  
+%
+
+% 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; ROUTINES FOR MAKING THE INPUT ARRAY
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+%
+
+% Makes a cluster of array elements for row i -- used by makea.
+  n is the total number of rows, rcond is the condition number %
+function MAKE_GROUP(i, n, non_zeros, rcond) =
+let 
+    % generates non_zeros random distinct integers between 0 and n-1%
+    indices = take(remove_duplicates({rand(i): i in dist(n,2*non_zeros)}),
+		   non_zeros);
+		   
+    % generates a random value between 0.0 and 1.0 for each index %
+    pairs = {i,rand(fl): i in indices; fl in dist(1.0,non_zeros)};
+
+    % add diagonal element -- delete any existing diagonal %
+    pairs = {j,v in pairs| i /= j} ++ [(i,.5)];
+
+    size = expt(rcond,float(i)/float(n));
+
+    % take outer product %
+    result = flatten({{(ix,iy,vx*vy*size) :(ix,vx) in pairs}: 
+		      (iy,vy) in pairs})
+in result $
+
+% Input is a sequence of (rowindex,columnindex,value) triples 
+  Output is compressed sparse row format with duplicates combined.
+     This is a nested sequence in which each subsequence represents a row
+     and consists of a squence of (index,value) pairs, where the index
+     gives the column number of a non-zero element, and value is its value.
+%
+function SPARSE(a) =
+let     
+    % collect by rows %
+    rows = int_collect(a);
+
+    % collect each row by column and combine duplicates %
+    result = {{column_idx, sum(vals): (column_idx,vals) in int_collect(row)}: 
+	      (row_idx, row) in rows}
+in result $
+
+function MAKEA(n, non_zeros, rcond) =
+let
+    % make group of array elements for each row %
+    triples = flatten({make_group(i,n,non_zeros,rcond): i in [0:n]});
+
+    % add identity*rcond to bound the smallest eigenvalue from below %
+    triples = triples ++ {i,i,rcond: i in [0:n]};
+
+    % convert to compressed sparse row format %
+    result = sparse(triples)
+in result $
+
+% 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; ROUTINES FOR CONJUGATE GRADIENT
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+%
+% WARNING: THE REST IS NOT YET DOCUMENTED %
+
+function MATVEC(a,x) =
+let ids,vals = unzip(flatten(a));
+    newvals = {vals*g:vals;g in x->ids}
+in {sum(row): row in partition(newvals,{#a:a})} $
+
+function DOTP(x,y) = sum({x*y:x;y}) $
+
+function CGSOL_LOOP(a,p,x,r,rho,i) =
+if (i == 0) then x
+else
+let 
+    q = matvec(a, p);
+    alpha = rho/dotp(p,q);
+    x = {x + alpha * p:x;p};
+    rho0 = rho;
+    r = {r - alpha * q:r;q};
+    rho = dotp(r,r);
+    beta = rho/rho0;
+    p = {beta*p + r:p;r}
+in cgsol_loop(a,p,x,r,rho,i-1) $
+
+function CGSOL(a,b,nitcg) =
+let 
+    x = dist(0.0,#b);
+    rho = dotp(b,b);
+    x = cgsol_loop(a,b,x,b,rho,nitcg);
+    r = matvec(a,x);
+    r = {b-r:b;r};
+    resid =  sqrt(dotp(r, r))
+in x,resid $
+
+% 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; THE OVERALL BENCHMARK
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+%
+
+function CGSOL_OUTER_LOOP(a,x,zeta,zeta1,nitcg,i,niter) =
+let
+    z,resid = cgsol(a,x,nitcg);
+    (zeta1,zeta2) = (zeta,zeta1);
+    zeta = 1. / max_val({abs(z):z});
+    zetapr = zeta - ((zeta-zeta1)^2 / (zeta - 2.0*zeta1 + zeta2));
+    % ignore = print_line(@i||-5 ++ @resid||-16 ++ @zetapr||-16); %
+    x = {z*zeta:z}
+in if (i == niter) then (zetapr,resid)
+   else cgsol_outer_loop(a,x,zeta,zeta1,nitcg,i+1,niter)  $
+
+
+function print_statistics(a,n,tm,zetapr,resid,nitcg,niter,parameters) =
+let
+    (nnzchk,zetchk,reschk,timchk) = parameters;
+    matops = 2*sum({#a:a});
+    opscg  = 5*n + matops + nitcg*(matops + 10*n + 2);
+    ops    = niter * (opscg + n + 1);
+    flops  =  1e-6 * float(ops) / tm;
+    format = (str,val) => (str||30 ++ "=" ++ val||-12 ++ [newline]);
+    line   = (format("total number of operations",@ops) ++
+	      format("total execution time",      @tm) ++
+	      format("performance in mflops",     @flops) ++ 
+              format("ratio: this machine/ymp(1cpu)", @(timchk/tm)) ++
+	      [newline] ++
+	      format("computed zeta",             @zetapr) ++
+	      format("reference value",           @zetchk) ++
+	      [newline] ++
+	      format("computed residual",         @resid) ++
+	      format("reference value",           @reschk))
+in print_line(line) $
+
+% The following strucutes contain the parameters for 
+  the two different sized tests.  The parameters are:
+         (n, non_zeros, nnzchk, zetchk, reschk, timchk)
+%
+small_parameters = ( 1400,  7,   78148,  .10188582986104, 0.6241e-05, 1.0538);
+large_parameters = (14000, 11, 1853104, .101249586035172, 3.5094e-04, 21.77);
+
+function CG(parameters) =
+let
+    (n,non_zeros,other_parameters) = parameters;
+    niter = 15;    % outer iterations %
+    nitcg = 25;    % inner iterations %
+    rcond = .1;    % condition number %
+    a = makea(n,non_zeros,rcond);
+    ignore = print_line("Final nonzero count: " ++ @sum({#a:a}) ++ [newline]);
+    x = dist(1.0,n);
+    (zeta,zeta1) = (0.,0.);
+    (zetapr,resid),tm = time(cgsol_outer_loop(a,x,zeta,zeta1,nitcg,1,niter));
+    ignore = print_statistics(a,n,tm,zetapr,resid,nitcg,niter,other_parameters)
+in t $
+
+function cg_small(ignore) = cg(small_parameters) $
+function cg_large(ignore) = cg(large_parameters) $

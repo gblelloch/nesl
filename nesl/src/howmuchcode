@@ -1,0 +1,11 @@
+#!/bin/csh -f
+
+set lispfiles = (config.lisp defop.lisp doc.lisp free.lisp funspec.lisp lisp-dependent.lisp nesl-read.lisp output.lisp parse.lisp pprint.lisp ptrans.lisp read-eval-print.lisp run-vcode.lisp strip-recs.lisp tokens.lisp trace.lisp trans.lisp type.lisp type-check.lisp vcode-lisp.lisp)
+
+set neslfiles = (io.lnesl ltoc.lnesl nest-ops.lnesl other-ops.nesl plot.lnesl scalar-ops.lnesl test.nesl types.lnesl vector-ops.lnesl)
+
+set otherfiles = (../utils/xneslplot.c ../utils/xneslplot.h)
+
+wc $lispfiles
+wc $neslfiles
+wc $otherfiles
