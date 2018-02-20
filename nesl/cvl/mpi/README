@@ -1,0 +1,44 @@
+This MPI version of CVL has been tested with MPICH on an Intel Paragon,
+Thinking Machines CM-5, IBM SP-1, and various workstations.  It should
+work on any MPICH-supported machine with an ANSI C compiler and 32-bit
+ints, and may work with other MPI implentations as well.
+
+Notes: 
+
+1) MPICH 1.0.9 is known not to work on the CM-5.  Use MPICH 1.0.8
+   instead.
+
+2) For machines without the ability to spawn arbitrary processes on a node 
+   (e.g. CM-5), add NOSPAWN to the list of Makefile flags.  This will also 
+   mean that the "spawn" test in the NESL test suite will fail.
+
+3) Makefile flags:
+
+   MPI must always be defined.
+
+   MPI_arch is MPICH system-dependent (e.g. MPI_paragon, MPI_cm5), and 
+   is currently only used to determine the default MAX_PROX (see below).
+
+   NDEBUG turns off some asserts that check MPI return codes.
+
+   BUF_SIZE=xxxx is the message size in bytes.  A higher value means
+   greater asymptotic bandwidth, greater n_{1/2}, and more memory use.
+   Values of 4096 and 8192 seem to work well for most MPPs.
+
+   RCV_EVERY=yyy is the number of loop iterations between checking for
+   message arrival.  80 or 160 seem to be good magic numbers for 4096 and
+   8192-byte buffers.
+
+     If compiled without BUF_SIZE and RCV_EVERY, the executable will look
+     for them as the last two entries on the command line (specified with
+     -bxxxx and -ryyy).  This can be useful for perfomance tuning.
+
+   MAX_PROC=zzz sets the maximum number of processors that can be used,
+   which in turn affects memory use.  See also mpicvl.h
+
+   BG_SEND turns on nonblocking sends.  This might make things faster if
+   your MPI/hardware can support sending in the background (we'd be
+   interested to hear of any machines where this makes a difference).
+
+14 July 1995
+nesl-bugs@cs.cmu.edu

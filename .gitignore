@@ -1,4 +1,4 @@
 *.pyc
-nesl/neslbin/**
-nesl/bin/vinterp.serial
-nesl/bin/neslserver
+*.o
+nesl/neslbin/*.*
+sls/.serverless/**

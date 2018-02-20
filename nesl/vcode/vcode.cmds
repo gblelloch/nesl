@@ -1,0 +1,160 @@
+%{
+/*
+* Copyright (c) 1992 Carnegie Mellon University 
+*                    SCAL project: Guy Blelloch, Siddhartha Chatterjee,
+*                                  Jonathan Hardwick, Jay Sipelstein,
+*                                  Marco Zagha
+* All Rights Reserved.
+*
+* Permission to use, copy, modify and distribute this software and its
+* documentation is hereby granted, provided that both the copyright
+* notice and this permission notice appear in all copies of the
+* software, derivative works or modified versions, and any portions
+* thereof, and that both notices appear in supporting documentation.
+*
+* CARNEGIE MELLON ALLOWS FREE USE OF THIS SOFTWARE IN ITS "AS IS"
+* CONDITION.  CARNEGIE MELLON DISCLAIMS ANY LIABILITY OF ANY KIND FOR
+* ANY DAMAGES WHATSOEVER RESULTING FROM THE USE OF THIS SOFTWARE.
+*
+* The SCAL project requests users of this software to return to 
+*
+*  Guy Blelloch				guy.blelloch@cs.cmu.edu
+*  School of Computer Science
+*  Carnegie Mellon University
+*  5000 Forbes Ave.
+*  Pittsburgh PA 15213-3890
+*
+* any improvements or extensions that they make and grant Carnegie Mellon
+* the rights to redistribute these changes.
+*/
+
+/* This file contains a list of all the VCODE tokens.  The lexer uses the
+ * hash function whenever it encouters an identifer and returns the token
+ * of the identifier found.
+ */
+
+#include <stdio.h>
+#include "config.h"
+#include "vcode.h"
+#include "y.tab.h"
+#include "parse.h"
+#include "vcode_hash.h"
+%}
+vcode_com_t {char *funct_string; VOPCODE vop;};
+%%
++, PLUS
+-, MINUS
+*, TIMES
+/, DIV
+%, MOD
+<, LT
+<=, LEQ
+>, GT
+>=, GEQ
+=, EQ
+!=, NEQ
+LSHIFT, LSHIFT
+RSHIFT, RSHIFT
+NOT, NOT
+AND, AND
+OR, OR
+XOR, XOR
+SELECT, SELECT
+RAND, RAND
+FLOOR, FLOOR
+CEIL, CEIL
+TRUNC, TRUNC
+ROUND, ROUND
+LOG, LOG
+SQRT, SQRT
+EXP, EXP
+SIN, SIN
+COS, COS
+TAN, TAN
+ASIN, ASIN
+ACOS, ACOS
+ATAN, ATAN
+SINH, SINH
+COSH, COSH
+TANH, TANH
+I_TO_F, I_TO_F
+I_TO_B, I_TO_B
+B_TO_I, B_TO_I
++_SCAN, PLUS_SCAN
+*_SCAN, MULT_SCAN
+MAX_SCAN, MAX_SCAN
+MIN_SCAN, MIN_SCAN
+AND_SCAN, AND_SCAN
+OR_SCAN, OR_SCAN
+XOR_SCAN, XOR_SCAN
++_REDUCE, PLUS_REDUCE
+*_REDUCE, MULT_REDUCE
+MAX_REDUCE, MAX_REDUCE
+MIN_REDUCE, MIN_REDUCE
+AND_REDUCE, AND_REDUCE
+OR_REDUCE, OR_REDUCE
+XOR_REDUCE, XOR_REDUCE
+PERMUTE, PERMUTE
+DPERMUTE, DPERMUTE
+FPERMUTE, FPERMUTE
+BPERMUTE, BPERMUTE
+BFPERMUTE, BFPERMUTE
+DFPERMUTE, DFPERMUTE
+EXTRACT, EXTRACT
+REPLACE, REPLACE
+DIST, DIST
+INDEX, INDEX
+RANK_UP, RANK_UP
+RANK_DOWN, RANK_DOWN
+PACK, PACK
+LENGTH, LENGTH
+MAKE_SEGDES, MAKE_SEGDES
+LENGTHS, LENGTHS
+COPY, COPY
+POP, POP
+CPOP, CPOP
+PAIR, PAIR
+UNPAIR, UNPAIR
+CALL, CALL
+RET, RET
+FUNC, FUNC
+IF, IF
+ELSE, ELSE
+ENDIF, ENDIF
+CONST, CONST
+EXIT, EXIT
+READ, READ
+WRITE, WRITE
+FOPEN, FOPEN
+FCLOSE, FCLOSE
+FREAD, FREAD
+FREAD_CHAR, FREAD_CHAR
+FWRITE, FWRITE
+SPAWN, SPAWN
+START_TIMER, START_TIMER
+STOP_TIMER, STOP_TIMER
+SRAND, SRAND
+MAIN, MAIN
+INT, INT
+BOOL, BOOL
+FLOAT, FLOAT
+SEGDES, SEGDES
+CHAR, CHAR
+T, V_TRUE
+F, V_FALSE
+NULL_STREAM, NULL_STREAM
+STDOUT, STDOUT
+STDIN, STDIN
+STDERR, STDERR
+%%
+
+VOPCODE lookup_id(id)
+char *id;
+{
+    vcode_com_t *result;
+
+    result = vcode_lookup(id , strlen(id));
+    if (result == NULL)
+	return IDENTIFIER;
+    else return result->vop;
+}

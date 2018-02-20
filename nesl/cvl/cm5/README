@@ -1,0 +1,129 @@
+		 AN IMPLEMENTATION OF CVL FOR THE CM-5		-*-Outline-*-
+
+
+* OVERVIEW
+
+This implementation conforms to the document "CVL : A C Vector Library",
+Version 2, CMU-CS-93-114, February 1993.
+
+The CM-5 CMMD reference manual (version 3.0) is the best source of
+information on CMMD.
+
+Please direct any email to nesl-bugs@cs.cmu.edu.
+
+
+* COMPILING
+
+The code should compile with both ANSI and non-ANSI compilers.  I used
+gcc 2.4.5 and /bin/cc, and found that gcc produced superior code.  This
+may have been because I was limiting /bin/cc to -O2; anything higher
+optimizes the use of external variables, which would almost certainly
+break the code that increments and reads the num_rcvd and num_sent
+global variables (switching over to CMNA and using the internal
+registers of the network interface would let me get rid of these
+variables).
+
+
+* SYSTEM DESIGN
+
+The code is written in the host-node style in C, using CMMD 3.0 for
+communication.  C and CMMD were chosen for speed of development.  A
+future version should probably be written in CM Fortran, or C and CMNA,
+to allow access to the vector units.  Note that the network is already
+the bottleneck on most benchmarks; rewriting to use the vector units
+won't help this at all...
+
+The original prototype was written in the hostless style; one copy of
+the vcode interpreter ran on each node.  This had the advantage of
+minimizing synchronization -- nodes could run free on e.g. sequences of
+elementwise operations, only synchronizing when required by e.g. a
+permute operation.  Unfortunately, it's not obvious what to do when a
+spawn instruction is reached, so a host-node rewrite was necessary.
+This consists of a single copy of the VCODE interpreter running on the
+host, and broadcasting instructions to a simple slave running on each
+node.  It therefore has less code running on each node (hence faster
+start-up and more memory available for data), but synchronizes at the
+beginning of every CVL instruction.  Compensating for this is the fact
+that the host and the slaves can now overlap computation; the VCODE
+interpreter starts decoding the next CVL instruction whilst the slaves
+execute the previous one.  Benchmarks at the time showed that the
+host-node style was marginally faster than the hostless style.
+
+
+* CURRENT OPTIMIZATIONS
+
+1) Where possible (mostly), things are loaded and stored 64 bits at a
+   time.  This avoids the delay of doing read-modify-write when storing
+   less than 64 bits.
+
+2) Mapping a vector location to a processor requires the equivalent of
+   an integer division.  It turns out to be faster to precompute the
+   reciprocal (as a double), and then do a double-to-integer conversion
+   rather than an integer division.
+   
+3) For pck_luz and pck_lub, up to 3 integers/cvl_bools are sent in each
+   CMAML packet.
+
+
+* FUTURE OPTIMIZATIONS
+
+1) XXX's.  There's a lot of them...
+
+2) Use the segment descriptor layout used by the PVM implementation
+   (each element has an associated number indicating which segment it is
+   in, rather than the number of segments starting at that position).
+
+3) Use chars as cvl_bools, trading speed for space.  Bitfields would
+   trade even more speed for space.
+
+4) Replace CMAM receive function with a CMNA function, so I can use all
+   5 words.  Then I can pack 2 doubles/4 ints/4 bools (16 bools if we
+   use chars). 
+
+5) Is it worth packing two pointer-value pairs in int and bool permutes?
+   Should I make num_procs buffers, or just keep one around and rely on
+   patterns in the data?
+
+6) Using CMNA, optimize the common case of short (4 word?) instruction
+   broadcasts. 
+
+7) Use the vector units.
+
+8) Broadcast multiple instructions in one message.
+
+9) Let the compiler do more global optimizations, using e.g. const for
+   global variables that are only set once (rather than passing them
+   everywhere as parameters).  Generally gcc-specific.
+
+10) How often do I loop in Wait()?  Is it ever faster to use explicit
+    acks?
+
+
+* CODE CONVENTIONS
+
+2 character indentation is used throughout the source.  Extensive use is
+made of function-defining macros, since so many of the CVL functions are
+alike; these macros are generally defined immediately before they are
+used.  Macros are also used to generalize the send and receive
+primitives; these are defined in cm5cvl.h (which everyone includes),
+host.h (which the host includes), and node.h (which the nodes include).
+In general, a lowercase_name is a function or variable; a
+Capitalized_Name is a macro, and an UPPERCASE_NAME is an argument to a
+macro.
+
+
+* NAMING CONVENTIONS
+
+Common variable names (and fragments thereof):
+
+mylen			number of elements to loop over on this processor
+len			length of unsegmented vector (== number of elements)
+nelt			number of elements
+nseg			number of segments
+segd			segment descriptor
+segstart		segment start position
+segcount		segment start flag
+firstseg		number of first seg on this processor
+firststart		start address of first seg on this processor
+s_, src_		source prefix
+d_, dst_		dest prefix

@@ -1,0 +1,86 @@
+1/15/92  Released VCODE for public distribution.
+
+Version 1.3
+6/3/92   Fixed bug in vcode_table.c: entry for DFPERMUTE was incorrect.
+	 Added code for FOPEN, FCLOSE, FREAD, FWRITE
+
+Version 1.4
+9/13/92  % operator was defined for floats.  % now does not take type arg.
+9/20/92  Lex #defines YYLMAX (the size of the yytext buffer) as 200. I
+	 added a warning message in tokens.ll to yell about strings that
+	 are longer than this.
+11/6/92  Fixed a bug in reading FLOAT constants.  The return value of the
+	 grammar had dval typed as a float, not a double; also, the 
+	 lex rule for reading in doubles used %f, and not %lf
+11/7/92  Initialize value of file in do_spawn to non-NULL to get correct
+	 error checking.
+11/17/92 Changed show_prog_entry() to show type information for IO codes.
+11/17/92 Added reading a character string.  Cleaned up code in do_read().
+1/25/93  Fixed bug in do_read (caused in 11/17 cleanup).  stack_type
+	 for segdes should be Int, not Segdes.
+
+Version 1.4.1
+3/29/93  Added FREAD_CHAR command
+3/29/93  Increased PROG_SIZE_MAX to 100K
+4/20/93  Inlined the I/O into do_read.  Sped up integer I/O 5x
+4/26/93  Fixed bug in memory reallocation during floating reads
+4/29/93  do_spawn(): replaced fork() with vfork(); free(command) 
+4/29/93  Made read_array into a local variable in read routines and now
+	 free() it after use.
+4/30/93  do_spawn(): was accessing off end of array
+7/11/93  stack.c: fixed incorrect size arguments in allocation for stack.
+	 This resulted in errors if sizeof(int) != sizeof (vb_t*)
+7/30/93  removed bogus "#ifdef CM5\n extern long yyleng\n #endif" [jch]
+
+Version 1.5
+9/12/93  Working version with version 2 of cvl
+9/13/93  actions.c: made program an expandable array, fixed error messages
+10/93	 Lots of minor fixes and code cleanups.  
+	 Moved all of the io code out of stack.c into io.c
+	 Added prototypes for all functions.  
+	 gcc -Wall -O results only in warnings that can't really be
+	    helped (its flow analyzer thinks some variables might be used
+	    unitialized).  
+	 Added functions: INDEX, RANK_UP, RANK_DOWN
+	 Added scan and reduce fucntions for xor and mult
+10/28/93 Changed format of cvl_fun_list to add inplace functions.  Changed
+	 accessors to cvl_fun_list in vcode.h
+	 Added support for inplace cvl calls.
+	 Added do_quick_copy() to stack.c
+
+
+Version 2.0
+2/1/94	 Changed version numbers to coincide with public release.
+2/2/94	 Changed usage() to indicate that -m units were doubles.
+2/20/94	 Use alo_foz(siz_fod(vmemsize)) to explicitly allocate doubles.
+2/24/94  Raised default initial memory allocation size to 1M (doubles).
+
+Version 2.1
+4/11/94	 Check return value of FORK in do_spawn().  Use _exit() and not
+	    exit() if execvp fails.
+4/12/94	 Added call to wait3() in do_spawn to try and clean up dead
+            processes.
+5/28/94  Fixed a bug in vstack_pop_real(), to handle case of size 0 vb
+	    being freed and merged into scratch_block.
+	 Was using incorrect arguments for pk2 scratch function.
+6/6/94	 Allow use of CHAR as declaration type.
+8/23/94  Added #ifdef NOSPAWN in io.c to prevent compilation of spawn code.
+2/1/95	 Fixed several dependencies on cvl_bool being int.  This was
+         breaking code on the paragon.
+4/14/95	 Fixed bug in vstack_init in which length and not size of vmem
+	 was being stored in the size field of scratch block.
+4/26/95	 Added POWERPC-specific includes to io.c (same as for SP-2), and
+	 extended parse.h to cope with yet another definition of yytext[].
+	 So use -DPOWERPC -D_POSIX_SOURCE to compile on e.g. rs_aix32.
+5/1/95	 Added SRAND function.
+7/28/95  Made code pass gcc -Wall -ansi -pedantic -Wpointer-arith -Wconversion
+	 without errors: several ints->unsigned changes (more need to be
+	 done), added #define for Posix putc, added test to see to
+	 read_array was NULL before trying to free it in io.c:do_read().
+	 Added YYTEXT_T typedef to deal with incompatabilities between
+	 different versions of lex/yacc.  Removed production for types_4
+	 in grammar.yy, since it is no longer used.
+7/14/95	 Fixed the NOSPAWN case of do_spawn to return valid values on the
+	 stack, rather than just returning.
+7/24/95  Changed strings.h to string.h in grammar.yy.  Added a few #ifdefs
+	 for solaris (and svr4 in general).

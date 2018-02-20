@@ -1,0 +1,325 @@
+		 AN IMPLEMENTATION OF CVL FOR THE CM-2		-*-Outline-*-
+
+
+* OVERVIEW
+
+The "DESIGN SKETCH" section at the end of this file contains Marco
+Zagha's original design outline.
+
+The CM-2 Paris reference manual (release 6.0, with 6.1 upgrades) is the
+best source of information on Paris itself.
+
+This implementation conforms to the document "CVL : A C Vector Library",
+Version 2, CMU-CS-93-114, February 1993.
+
+Please direct any email to nesl-bugs@cs.cmu.edu
+
+
+* REQUIREMENTS
+
+The code is based on Paris 6.0.  Version 6.1 is recommended, since it
+has improved routing microcode, and scan-based instructions will run
+significantly faster.  However, none of the new instructions introduced
+in version 6.1 are used.
+
+Floating point arithmetic is done using 64 bits.  CM-2's with no FP
+units, or only 32-bit FP units, will get poor performance.
+
+256kbits or 1Mbit of memory per CM-2 processor is recommended, even
+though the user can only actually allocate vectors of up to 64kbits in
+length (a Paris limit).
+
+
+* MACHINE LIMITS
+
+** Type sizes
+
+Integer arithmetic is done to 32 bits, and floating-point arithmetic to
+64 bits (using the IEEE standard layout).
+
+Booleans are represented as 1-bit unsigned integers.  Unsigned was
+chosen because signed integers must have at least 2 bits.  Some of the
+code is cavalier with mixing signed and unsigned integers, and doesn't
+take into account what happens if an unsigned integer ever gets big
+enough to set the high bit.  This could happen when by doing an unsigned
++-scan on a vector of unsigned integers derived from 1-bit flags, then
+getting the reduction into a results field and treating it as a signed
+integer.  This will cause problems if/when CM-2 CVL is extended to cope
+with 32/64-bit field lengths.
+
+** Maximum vector lengths
+
+The code currently lets the user allocate vectors of up to 64kbits at a
+time (this is a Paris limit).  The largest data type is the double (64
+bits).  Since all CVL vectors must be maximally aligned, this means that
+all vectors require 64 bits per element, and hence the maximum vector
+length is 1k elements per real CM-2 processor.  Therefore, to find the
+maximum CVL vector length just multiply the number of processors
+available by 1k.  For example, on an 8k sequencer, we can have up to 8M
+elements per vector.  On a full 64k sequencer, we can have up to 64M
+elements.
+
+
+* CENTRAL IDEAS
+
+** Definition of a vec_p
+
+A vec_p is defined as a CM_field_id, i.e., a pointer to a Paris field.
+Adding an offset to a field (add_fov) then translates directly to
+CM_add_offset_to_field_id.  This works well, but has the following
+consequences: 
+1) For certain operations (i.e., scans, sends) we need to operate using
+   one VP per element, and for long vectors this will need a VP ratio
+   of greater than 1.
+2) This means we need to make aliases of the input and output fields
+   in order to access them from higher VP ratios.
+3) Aliases can only be set up on allocated (original) fields, not on
+   fields constructed by CM_add_offset_to_field_id from other fields.
+4) Therefore, we first have to copy the input fields (which may have
+   been constructed using offsets) into freshly-allocated fields,
+   which we are sure we can make aliases of.
+On the plus side, it also means that all CVL functions can be called
+in-place.
+
+** Use of memory
+
+All user requests for vector space are passed straight to the CM-2 Paris
+heap manager.  For benchmarking, you might want to switch off the
+automatic Paris heap compression (which can occur at unpredictable
+times) and use explicit compression instead.
+
+None of the CVL functions use scratch space.  This is because the
+temporary workspace used by functions must be aliased to be accessed at
+VP ratios greater than 1, and it is not possible to alias vectors which
+were created by adding offsets to other vectors (as most user vectors
+will be).  Instead, the CM-2 Paris stack is used for temporary
+workspace, from which functions allocate their own fields.
+
+There aren't any checks for running out of either heap or stack memory.
+These should be added, although it isn't immediately obvious what error
+recovery we can add, apart from not dumping core...
+
+** It's ok to operate on garbage
+
+Element-wise operations are done on all processors at once, even if not
+all of them contain elements of the vector being operated on.
+Justification: we wouldn't save any time by masking them out, and we
+can't use the memory for anything else.
+
+
+* CODE STYLE
+
+Classic C, using the K&R brace style with 2-space tab stops.  When
+multi-line macros are defined, the line separator \ is placed in column
+72.  I should probably update to ANSI C.
+
+
+* CODE ASSUMPTIONS
+
+All functions can assume that they are called with a current VP ratio of
+1, and with all processors switched on.  If they change VP ratios or
+context, they must restore the defaults before exiting.  This can be
+done with the following code sequencer:
+	CM_set_vp_set (_CVL_default_vp_set);
+	CM_set_context ();
+
+
+* USE OF MACROS
+
+Since CVL consists of a few basic functions, replicated over different
+operations (min, max, add, etc) and argument types (bool, int, double),
+extensive use is made of function-defining macros to reduce the size of
+the source files, and hence the amount of maintenance needed.  Such a
+macro is typically the skeleton of a particular function type -- all
+that needs to be filled in is the name of the function, its type (and
+associated field lengths), and the name and possibly type of the Paris
+operation to use.  All of this information is supplied as arguments to
+the defining macro.
+
+I really should make more use of function pointers and arguments to
+reduce the code size, e.g. have a single core permute function that can
+be handed the right function arguments to do a permute on doubles.
+One problem is that Paris functions operating on floating-point numbers
+take an extra argument, so I'd need to wrap them up in yet ANOTHER
+function that took n-1 arguments and called the appropriate Paris
+function with n arguments.  Horrible.
+
+The GLUE and GLUE3 macros are used to create Paris function names out of
+the portions of a name common to all the Paris types and the Paris
+abbreviation for a particular type (_s_,_f_,_u_).  This is made possible
+by the regularity of the Paris naming scheme.  Note that GLUE/GLUE3
+don't strip out any spaces that may have been added onto their arguments
+in an attempt to improve the "readability" of a macro call.  Thus, macro
+calls to GLUE, or of function-defining macros that will in turn call
+GLUE, should not have spaces around _s_, _f_, or _u_.
+
+
+* NAMING CONVENTIONS
+
+** Functions
+
+Functions and variables used internally by the CVL code (either for
+housekeeping purposes or to share commonly-used code) have names with
+the prefix "_CVL_".  As many of these as possible are statically defined
+in internal.c
+
+** Macros
+
+One-shot function-defining macros have names with the prefix "make_".
+Global, commonly-used macros generally have upper-case names.
+
+** Macro Arguments
+
+In function-defining macros, the macro arguments have an underline
+prefix (e.g., _bits, _type), to make them easier to distinguish from the
+arguments and variables of the function being defined.  The most common
+macro arguments are:
+	_name	: the name of the CVL function to be defined
+	_unseg	: the name of the equivalent unsegmented function
+	_type	: the type of the CVL function
+	_abbrev	: the Paris abbreviation for this type (s/f/u)
+	_bits	: see below
+	_argbits: see below
+_bits is used to pass a field length to a function-defining macro; it
+will be either BOO_BITS (1), INT_BITS (32), or DBL_BITS (64).  But most
+Paris floating-point instructions require the lengths of the exponent
+and mantissa, rather than just the total field length.  _argbits is used
+to pass this extra information to a macro -- it is identical to _bits
+for booleans and integers, but is defined as SIG_BITS (52,11) for
+doubles (the IEEE double-precision floating-point standard).
+
+** Variables
+
+nelt and nseg are normally used to hold the number of elements and
+segments, respectively, in a vector.  elt_count and seg_count are the
+corresponding VP ratios required for that vector (the results of calling
+_CVL_elts_per_proc with nelt and nseg).  This naming scheme may be
+abbreviated to just count, or extended to src_elt_count, dst_elt_count,
+etc., depending on the complexity of the function and how many different
+VP sets it needs to operate from.  Consistency is the hobgoblin of
+little minds :-)
+
+Temporary fields allocated inside a function (often for the purpose of
+copying argument fields into, so that we can alias argument fields from
+higher VP rations), may have the prefix "tmp_" (I got a bit lax later on
+in the writing, so this is not guaranteed).  Aliases of these fields
+have the prefix "vp_" (this *is* guaranteed).
+
+
+* SEGMENT DESCRIPTORS
+
+A segment descriptor is just a CM_field_id/vec_p, pointing to the
+first of three consecutive fields:
+  1) segindx	: nseg elements, each of INT_BITS
+  2) segempty	: nseg elements, each of 1 bit
+  3) segstart	: nelt elements, each of 1 bit
+segindx holds the start address of each segment 
+	(e.g., 0 5 5 9 16)
+segempty marks segments which are empty 
+	(e.g., 0 1 0 0 0) 
+segstart marks elements which are at the beginning of a segment 
+	(e.g., 1 0 0 0 0 1 0 0 0 1 0 0 0 0 0 0 1 0 0... )
+Obviously, segempty and segstart contain redundant information which
+could be computed on the fly from segindx.  They are kept around for the
+sake of speed.
+
+
+* CURRENT OPTIMIZATIONS
+
+** Roll-your-own looping beats using VP sets
+
+Where possible (e.g., on elementwise operations), an explicit C loop is
+used to loop over multiple elements in each physical processor, rather
+than changing to a VP set with one element per virtual processor and
+then doing a single global operation.  This "roll-your-own" looping
+should be up to twice as fast as VP looping (see Marco's design sketch
+at the end of this file).
+
+Note that this also applies to setting up context flags for limiting the
+range of any operation involving communication primitives (scans, sends,
+etc).  Rather than setting the context by making each VP compare its
+send address to the vector length, we operate at a VP ratio of 1, set or
+reset bits in an array with VP_ratio bits per processor, and then switch
+to VP_ratio and load context directly from this array.
+
+** Special case code for single segments
+
+CM-2 CVL has been optimized for use by the VCODE interpreter, which
+deals almost exclusively in segmented vectors, even though most of the
+time these will only have one segment.  Since the CM-2 CVL segmented
+functions are generally slower than the unsegmented ones, special-case
+code has been added that checks if the source and/or destination vectors
+only have one segment.  If this is the case, then the faster unsegmented
+routine is called instead.  This speeds up some benchmarks by a factor
+of 4 or more.
+
+
+* FUTURE OPTIMIZATIONS
+
+** Fortran
+
+Rewrite the whole damn thing in Fortran for slicewise performance.
+
+** Balancing vector allocation
+
+When the elements of a vector can't be divided evenly amongst the
+available processors (e.g., 8193 elements on a 8192-processor
+sequencer), the code currently uses the default Paris scheme of packing
+the extra elements to one end (thus all 8192 processors would have 1
+element, and the first processor would have the 8193rd element as well).
+Communication patterns for sends, gets and scans would probably be
+better if we instead divided the elements evenly amongst a subset of the
+processors (e.g., the first 4096 processors have 2 elements, the 4097th
+has just 1, and the rest have none).  However, this would require more
+housekeeping, possibly offsetting the communications advantages.
+
+** Using less than 32 bits for send addresses
+
+32 bits are needed to address the largest possible Paris field (64kbits
+on each of 64k processors).  Since all vectors in this implementation
+are 64 bits long, we need log2(64) = 6 fewer bits to address the largest
+possible CVL field.  This would save 6/32, or approximately 20% of the
+addressing bits, and could be achieved by defining a new constant
+ADR_BITS and replacing relevant occurrences of INT_BITS.
+
+With more work, each function could compute on the fly the minimum
+number of bits needed.
+
+** Allowing user vectors to span more than one 64k heap field.
+
+This would remove the arbitrary upper limit on the size of a user
+vector.  It would require a lot of extra work, and it wouldn't increase
+the maximum vector size by *that* much (i.e., from 64kbits to 256kbits
+on a typical CM-2; only a 4-fold improvement, and even that assumes that
+we don't actually use any stack space).  Might be worth considering if
+users ever start playing on 1Mbit CM-2's.
+
+** More internal functions
+
+Subfunctions of split_segd that just copy out a single field at a time.
+Use the NEWS array for fast communication with neighbors (e.g. len_fos).
+Need a function to switch from one vp per element to one vp per segment
+without going through the default VP set.
+
+** Faster ind_lez
+
+Add code to check (with two reductions) if ind_lez is being done with
+stride of 1 and init of zero (or any other constants).  If so, we can
+use much simpler code.
+
+
+* POSSIBLE BUGS
+
+Those functions that are called by the VCODE interpreter should be
+pretty stable.  Expect to find bugs in any functions that are not called
+by the interpreter.  In particular, some of the more exotic permutes are
+just too complex to expect them to work right first time.  Look in
+particular at VP ratio boundaries, e.g., what happens if the elements
+are at a VP ratio of 2 whilst the segments are at a VP ratio of 1, or
+the source elements are at a VP ratio of 3 whilst the destination
+elements are at a VP ratio of 5.
+
+The CVL library does not pass the "test_max_sez" routine in the
+test-prims package.  I claim this is due to an error in the test routine
+rather than in the CVL library.  If you understand 6-level " ? : "
+conditionals, you're welcome to challenge this claim...

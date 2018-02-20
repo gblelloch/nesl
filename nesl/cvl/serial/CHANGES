@@ -1,0 +1,14 @@
+2.1:
+2/20/94    All segmented instructions (for which this wins) now call the
+	   unsegmented code when working on single segment operand.
+	   Remove use of memmove in mov_ instruction.
+
+4/26/95	   Changed name of div macro to divide, to avoid conflict with ANSI C
+	   in fascist xlc compiler for rs_aix32. 
+
+4/27/95    Added rnd_foz to facilt.c
+
+11/21/95   Updated defins.h so it would compile under OSF 2.0
+	   (wrapped definition of random in an #ifndef __osf__)
+
+2.0:	  
