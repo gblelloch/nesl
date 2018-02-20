@@ -1,4 +1,4 @@
 *.pyc
 *.o
-nesl/neslbin/*.*
+nesl/neslbin/**
 sls/.serverless/**
