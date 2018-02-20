@@ -29,13 +29,13 @@ sp1_mpidir = /usr/local/mpi
 serial:
 	$(MAKE) ARCH='serial' CC="$(serialCC)" cvlmake
 	$(MAKE) ARCH='serial' CC="$(serialCC)" vcodemake
-	$(MAKE) ARCH='serial' CC="$(serialCC)" utilsmake
+#	$(MAKE) ARCH='serial' CC="$(serialCC)" utilsmake
 	$(MAKE) lispsetup
 
 linux:
 	$(MAKE) ARCH='serial' CC="$(linuxCvlCC)" cvlmake
 	$(MAKE) MAKE="$(MAKE) -f Makefile.linux" ARCH='serial' CC="$(serialCC)" vcodemake
-	$(MAKE) ARCH='serial' CC="$(serialCC)" XLIBPATH='/usr/X11/lib/' utilsmake
+#	$(MAKE) ARCH='serial' CC="$(serialCC)" XLIBPATH='/usr/X11/lib/' utilsmake
 	$(MAKE) lispsetup
 
 cvlmake: 
