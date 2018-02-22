@@ -47,7 +47,7 @@ You need to run mlisp -I ~a to restart."
 	  (si::save-system filename))
   #+lucid (disksave filename :restart-function restart-function)
   #+clisp (ext:saveinitmem filename :executable t 
-			   :init-function restart-function)
+			   :init-function restart-function :quiet t)
   #+cmu (progn
 	  (format t "
 Warning: the lisp image of CMU Common Lisp requires over 20 Megabytes.
