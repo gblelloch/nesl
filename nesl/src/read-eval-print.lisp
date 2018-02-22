@@ -12,6 +12,7 @@
 ;;;;;;;;;;;;;;;;;;
 
 (defparameter *definitions* (make-defs-table))
+(defparameter *stderr* *error-output*)
 
 ;;;;;;;;;;;;;;;;;;
 ;;; THESE ARE VARIOUS TOP LEVEL PARAMETERS
@@ -101,7 +102,7 @@ time of certain constructs."
 ;;;;;;;;;;;;;;
 
 (defun nesl-error (format-string &rest args)
-  (let ((eo *error-output*))
+  (let ((eo *stderr*))
     (if *current-fundef*
 	(if *cnesl-syntax*
 	    (format eo "~%Error in Function definition ~a.  " *current-fundef*)
@@ -859,8 +860,9 @@ Top-level Commands:
 (defun run-nesl-server ()
   (declare (special *username*))
   (setq *username* (time-mark))
+  (setq *stderr* (open "/dev/stderr" :direction :output))
   (ignore-errors 
-   (nesl-loop *standard-input* :interactive nil :print t))
+    (nesl-loop *standard-input* :interactive nil :print t))
   (format t "~%")
   (quit-lisp))
 
