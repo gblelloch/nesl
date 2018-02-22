@@ -23,6 +23,7 @@ $ cd nesl/sls
 2. Install NodeJS version 8 or above, e.g.:
 ```
 $ curl -sL https://deb.nodesource.com/setup_8.x | sudo -E bash -
+$ sudo apt-get install nodejs
 ```
 3. Install the serverless framework:
 ```
@@ -44,7 +45,7 @@ $ sls deploy
 
 ## Test that it works
 ```
-$ apt-get install w3m
+$ sudo apt-get install w3m
 $ curl -s -X POST <API-GATEWAY-ENDPOINT> --data body:program=a%3D1%3B | w3m -dump -T text/html
 The result of:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -72,7 +73,7 @@ $ sls invoke local -f nesl -d '{"program":"a=1;"}'
 ## (Optional) Recompile the interpreter
 1. Install Linux dependencies:
 ```
-$ sudo apt-get install byacc lex clisp
+$ sudo apt-get install byacc flex clisp
 ```
 2. Build binaries (from `nesl` folder of the cloned repository):
 ```
