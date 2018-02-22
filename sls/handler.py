@@ -58,32 +58,11 @@ def nesl(event, context):
     os.environ["LD_LIBRARY_PATH"] = './lib'
 
     # Call the NESL interpreter, feed input from <prog>, decode output
-    p = subprocess.Popen("bin/neslserver", stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.STDOUT)
-    res = p.communicate(input=prog.encode('latin-1'))[0].decode()
-    logger.info('Interpreter output: \n' + res)
-
-    # Keep just the output between PROLOGUE and EPILOGUE lines, split errors from valid program output.
-    # We assume that valid program output follows the following pattern: <handle> = <result> : <type>
-    PROLOGUE = "Type :h and hit Enter for context help."
-    EPILOGUE = "Bye."
-    out, err = "", ""
-    isProgOutput = False
-    for line in res.splitlines():
-        if isProgOutput:
-            if re.search(EPILOGUE, line) is not None : # End of program input, can exit the loop
-                break    
-            if re.search("^.+ = .+ : .+", line) is not None : # valid output line, append
-                out += (line + '\n')
-            else: # error or empty line, append to err only non-empty
-                if len(line.strip()) > 0:
-                    err += (line + '\n')
-        else:
-            if re.search(PROLOGUE, line) is not None : # Program output starts after this line
-                isProgOutput = True
-    if len(out) > 0:
-        logger.info('Program output: \n' + str(out))
-    if len(err) > 0:
-        logger.info('Program error: \n' + str(err))
+    p = subprocess.Popen("bin/neslserver", stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
+    out, err = p.communicate(input=prog.encode('latin-1'))
+    #out, err = aout.decode(), aerr.decode()
+    logger.info('Interpreter output: \n' + out)
+    logger.info('Interpreter error: \n' + err)
 
     return {"out": out, "err": err}
 
